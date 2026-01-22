@@ -47,7 +47,7 @@ cargo run --release
 *The server will start on default port **8569**.*
 
 ### 3. Connect via URI
-UN-DB uses a **Unified Connection URI** for configuration:
+ToriDB uses a **Unified Connection URI** for configuration:
 `db://username:password+host:port/dbname`
 
 ### 4. Use an SDK

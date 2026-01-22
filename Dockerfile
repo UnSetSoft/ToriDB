@@ -1,5 +1,5 @@
 # Build Stage
-FROM rust:1.84-slim-bookworm AS builder
+FROM rust:bookworm AS builder
 
 WORKDIR /usr/src/undb
 COPY . .

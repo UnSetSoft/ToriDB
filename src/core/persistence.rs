@@ -16,8 +16,8 @@ pub struct AofLogger {
 
 impl AofLogger {
     pub fn new(db_name: &str) -> io::Result<Self> {
-        let dir = "data";
-        std::fs::create_dir_all(dir)?;
+        let dir = std::env::var("DB_DATA_DIR").unwrap_or_else(|_| "data".to_string());
+        std::fs::create_dir_all(&dir)?;
         let path = format!("{}/{}.db", dir, db_name);
         let path_owned = path.clone();
         let (tx, mut rx) = mpsc::channel::<AofOp>(10000); // Larger buffer

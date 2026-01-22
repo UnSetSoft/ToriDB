@@ -1,0 +1,14 @@
+services:
+  undb:
+    build: .
+    image: toridb:latest
+    ports:
+      - "8569:8569"
+    environment:
+      - DB_HOST=0.0.0.0
+      - DB_PORT=8569
+      - DB_DATA_DIR=/app/data
+      - DB_WORKERS=100
+    volumes:
+      - ./undb_data:/app/data
+    restart: unless-stopped

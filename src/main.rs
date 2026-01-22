@@ -16,9 +16,10 @@ use bytes::BytesMut;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut host = "127.0.0.1".to_string();
+    let mut host = std::env::var("DB_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let mut port = std::env::var("DB_PORT").unwrap_or_else(|_| "8569".to_string());
-    let mut db_name = "data".to_string();
+    let mut db_name = std::env::var("DB_NAME").unwrap_or_else(|_| "data".to_string());
+    let data_dir = std::env::var("DB_DATA_DIR").unwrap_or_else(|_| "data".to_string());
     
     // Check DB_URI
     if let Ok(uri_str) = std::env::var("DB_URI") {
@@ -72,7 +73,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Initialize Worker Pool
-    let worker_pool = WorkerPool::new(50, engine.clone(), aof.clone());
+    let workers = std::env::var("DB_WORKERS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(50);
+    let worker_pool = WorkerPool::new(workers, engine.clone(), aof.clone());
 
     loop {
         let (mut socket, addr) = listener.accept().await?;

@@ -1,6 +1,5 @@
 # ToriDB (⛩️)
 
-![Status](https://img.shields.io/badge/Status-100%25_Complete-success)
 ![Language](https://img.shields.io/badge/Language-Rust-orange)
 ![License: UPL 1.0](https://img.shields.io/badge/License-UPL%201.0-blue?style=for-the-badge)
 ![License: UPL-CE 1.0](https://img.shields.io/badge/License-UPL%E2%80%91CE%201.0-purple?style=for-the-badge)

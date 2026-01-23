@@ -780,6 +780,13 @@ fn parse_rewrite_aof(input: &str) -> IResult<&str, Command> {
     )(input)
 }
 
+fn parse_use(input: &str) -> IResult<&str, Command> {
+    map(
+        tuple((tag_no_case("USE"), multispace1, parse_identifier)),
+        |(_, _, db)| Command::Use { db_name: db.to_string() }
+    )(input)
+}
+
 fn parse_client(input: &str) -> IResult<&str, Command> {
     let (input, _) = tag_no_case("CLIENT")(input)?;
     let (input, _) = multispace1(input)?;
@@ -846,6 +853,7 @@ pub fn parse_command(input: &str) -> IResult<&str, Command> {
         parse_acl,
         parse_incr,
         parse_decr,
+        parse_use,
         parse_rewrite_aof,
         parse_ping,
         parse_save,

@@ -3,11 +3,13 @@ use crate::query::Command;
 use crate::core::structured::{Column, DataType};
 use crate::core::persistence::AofLogger;
 use crate::core::security::User;
+use crate::core::logger;
 
 pub struct Session {
     pub user: Option<User>,
     pub _addr: String,
     pub connected_at: std::time::Instant,
+    pub current_db: String,
 }
 
 use std::sync::Arc;
@@ -18,8 +20,10 @@ pub fn execute_command(engine: &Arc<DatabaseEngine>, cmd: Command, aof: &AofLogg
         let target_user = username.as_deref().unwrap_or("default");
         if engine.security.authenticate(target_user, password) {
             session.user = engine.security.get_user(target_user);
+            logger::info(&format!("Client {} authenticated as user '{}'", session._addr, target_user));
             return ("OK".to_string(), None);
         } else {
+            logger::warn(&format!("Authentication failed for client {} as user '{}'", session._addr, target_user));
             return ("ERROR: Invalid password".to_string(), None);
         }
     }
@@ -32,6 +36,7 @@ pub fn execute_command(engine: &Arc<DatabaseEngine>, cmd: Command, aof: &AofLogg
 
     // 3. Check permissions
     if !user.can_execute(&cmd) {
+        logger::warn(&format!("Permission denied: client {} (user '{}') attempted unauthorized command: {:?}", session._addr, user.username, cmd));
         return (format!("ERROR: User '{}' has no permissions for this command", user.username), None);
     }
     
@@ -94,14 +99,20 @@ pub fn execute_command(engine: &Arc<DatabaseEngine>, cmd: Command, aof: &AofLogg
         Command::Save => {
             match crate::core::snapshot::save_snapshot(&engine.flexible, &engine.structured, &engine.db_name) {
                 Ok(_) => ("OK".to_string(), None),
-                Err(e) => (format!("ERROR: {}", e), None),
+                Err(e) => {
+                    logger::error(&format!("Snapshot Save failed: {}", e));
+                    (format!("ERROR: {}", e), None)
+                },
             }
         }
         Command::RewriteAof => {
             let cmds = engine.generate_rewrite_commands();
             match aof.rewrite(cmds) {
                  Ok(_) => ("OK".to_string(), None),
-                 Err(e) => (format!("ERROR: AOF Rewrite failed: {}", e), None),
+                 Err(e) => {
+                    logger::error(&format!("AOF Rewrite failed: {}", e));
+                    (format!("ERROR: AOF Rewrite failed: {}", e), None)
+                 },
             }
         }
         Command::Info => {
@@ -137,6 +148,10 @@ pub fn execute_command(engine: &Arc<DatabaseEngine>, cmd: Command, aof: &AofLogg
         }
         Command::ClusterAddSlots { slots } => {
             engine.cluster.add_slots(slots);
+            ("OK".to_string(), None)
+        }
+        Command::Use { db_name } => {
+            session.current_db = db_name;
             ("OK".to_string(), None)
         }
         // ACL Commands

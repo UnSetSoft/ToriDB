@@ -57,6 +57,7 @@ impl User {
             Command::ZAdd { .. } => "zadd",
             Command::ZRange { .. } => "zrange",
             Command::ZScore { .. } => "zscore",
+            Command::Use { .. } => "use",
         };
 
         // Simplified rule checking

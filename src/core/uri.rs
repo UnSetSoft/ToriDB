@@ -15,8 +15,8 @@ pub struct ConnectionUri {
 impl ConnectionUri {
     pub fn parse(uri: &str) -> Result<Self, String> {
         // Format: db://[username:password+]host[:port][/dbName][?query]
-        // Note: the + is used as a separator between auth and host to avoid ambiguity with :port
-        let re = Regex::new(r"^db://(?:(?:([^:]+):([^@+]+)[@+])?)([^:/\?]+)(?::(\d+))?(?:/([^?]+))?(?:\?(.*))?$").map_err(|e| e.to_string())?;
+        // Updated regex to handle trailing slashes and optional db_name more robustly
+        let re = Regex::new(r"^db://(?:(?:([^:]+):([^@+]+)[@+])?)([^:/\?]+)(?::(\d+))?(?:/([^?]*))?(?:\?(.*))?$").map_err(|e| e.to_string())?;
         
         if let Some(caps) = re.captures(uri) {
             let username = caps.get(1).map(|m| m.as_str().to_string());
@@ -26,14 +26,21 @@ impl ConnectionUri {
                 .map(|m| m.as_str().parse::<u16>().map_err(|_| "Invalid port".to_string()))
                 .transpose()?
                 .unwrap_or(8569);
-            let db_name = caps.get(5).map(|m| m.as_str().to_string());
+            
+            // Trim leading/trailing slashes from db_name
+            let db_name = caps.get(5)
+                .map(|m| m.as_str().trim_matches('/').to_string())
+                .filter(|s| !s.is_empty());
             
             let mut query = HashMap::new();
             if let Some(query_str) = caps.get(6) {
                 for pair in query_str.as_str().split('&') {
+                    if pair.is_empty() { continue; }
                     let mut parts = pair.splitn(2, '=');
                     if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
                         query.insert(key.to_string(), value.to_string());
+                    } else if let Some(key) = parts.next() {
+                         query.insert(key.to_string(), "true".to_string());
                     }
                 }
             }
@@ -49,6 +56,12 @@ impl ConnectionUri {
         } else {
             Err("Invalid URI format. Expected: db://[user:pass+]host[:port][/...][?...]".to_string())
         }
+    }
+
+    pub fn get_query_param<T: std::str::FromStr>(&self, key: &str, default: T) -> T {
+        self.query.get(key)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(default)
     }
 
     #[allow(dead_code)]

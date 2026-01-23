@@ -121,23 +121,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "db-engine"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcrypt",
- "bytes",
- "crc32fast",
- "dashmap",
- "nom",
- "rand",
- "regex",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -491,6 +474,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "toridb"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcrypt",
+ "bytes",
+ "crc32fast",
+ "dashmap",
+ "nom",
+ "rand",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

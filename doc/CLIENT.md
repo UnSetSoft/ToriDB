@@ -14,7 +14,13 @@ Connect using a Unified Connection URI:
 
 ```javascript
 const { ToriDB } = require('toridb');
-const client = new ToriDB("db://admin:secret+localhost:8569");
+
+// Option A: Specify DB in URI (Recommended)
+const client = new ToriDB("db://admin:secret+localhost:8569/production");
+
+// Option B: Programmatic selection (Only if not in URI)
+const client2 = new ToriDB("db://admin:secret+localhost:8569");
+client2.dbName("staging"); 
 
 await client.connect();
 ```
@@ -108,8 +114,9 @@ await client.system.replication.slaveOf("master-host", 8569);
 
 ### Persistence
 ```javascript
-await client.system.save(); // Force snapshots
+await client.system.save(); // Force snapshots for current DB
 await client.system.rewriteAof(); // Optimize AOF file
+await client.execute("USE", "archive"); // Switch to another DB dynamically
 ```
 
 ---

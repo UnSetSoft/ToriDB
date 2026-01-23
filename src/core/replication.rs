@@ -89,6 +89,7 @@ pub fn start_replication_task(engine: Arc<DatabaseEngine>, aof: Arc<AofLogger>, 
                     user: engine.security.get_user("default"), 
                     _addr: format!("master-{}:{}", host, port),
                     connected_at: std::time::Instant::now(),
+                    current_db: engine.db_name.clone(),
                 };
                 
                 loop {

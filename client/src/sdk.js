@@ -1,6 +1,6 @@
 import net from 'net';
-import { Compiler } from './compiler';
-import { RespParser } from './resp';
+import { Compiler } from './compiler.js';
+import { RespParser } from './resp.js';
 
 /**
  * Main client class for interacting with ToriDB.
@@ -28,6 +28,8 @@ class ToriDB {
         this.port = 8569;
         this.user = "default";
         this.password = null;
+        this.db = "data";
+        this._dbToSelect = null;
         this._parseUri(uri);
 
         this.parser = new RespParser();
@@ -47,13 +49,18 @@ class ToriDB {
      * @private
      */
     _parseUri(uri) {
-        const regex = /^db:\/\/(?:(?:([^:]+):([^@+]+)[@+])?)([^:/\?]+)(?::(\d+))?(?:(?:\/([^?]+))?)?/;
+        const regex = /^db:\/\/(?:(?:([^:]+):([^@+]+)[@+])?)([^:/\?]+)(?::(\d+))?(?:(?:\/([^?]*))?)?(?:\?(.*))?/;
         const match = uri.match(regex);
         if (match) {
             this.user = match[1] || "default";
             this.password = match[2] || null;
             this.host = match[3];
             this.port = parseInt(match[4], 10) || 8569;
+            const dbFromUri = (match[5] || "").replace(/\/+$/, "");
+            if (dbFromUri) {
+                this.db = dbFromUri;
+                this._dbToSelect = dbFromUri;
+            }
         }
     }
 
@@ -103,6 +110,14 @@ class ToriDB {
                         return reject(new Error(`Authentication failed: ${e.message}`));
                     }
                 }
+                if (this._dbToSelect) {
+                    try {
+                        await this.execute("USE", this._dbToSelect);
+                    } catch (e) {
+                        // If it fails, we keep the connection but warn
+                        console.warn(`Failed to select database ${this._dbToSelect}: ${e.message}`);
+                    }
+                }
                 resolve();
             });
             this.socket.once('error', reject);
@@ -115,6 +130,22 @@ class ToriDB {
     disconnect() {
         this.socket.destroy();
         this.isConnected = false;
+    }
+
+    /**
+     * Programmatically selects a database.
+     * Only works if no database was specified in the connection URI.
+     * @param {string} name - The name of the database.
+     * @returns {ToriDB} This instance for chaining.
+     */
+    dbName(name) {
+        if (this._dbToSelect && this._dbToSelect !== "data") {
+            console.warn("Database already specified in URI. Programmatic selection ignored.");
+            return this;
+        }
+        this.db = name;
+        this._dbToSelect = name;
+        return this;
     }
 
     /**

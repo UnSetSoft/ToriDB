@@ -25,7 +25,8 @@
 ### 🔐 Security & Reliability
 - **RBAC & ACLs**: Granular user permissions and bcrypt-hashed authentication.
 - **Log-Structured Persistence**: Redo Log (`.db`) and Snapshots (`.snap.json`) with CRC32 integrity checks.
-- **Isolated Storage**: Centralized in `/data` and logically segregated per connection.
+- **Dynamic Multi-Database**: Create and switch databases on-the-fly via URI (`/dbName`) or `USE` command.
+- **Isolated Storage**: Centralized in `/data` and logically segregated per database.
 
 ### 🛸 Distributed Architecture
 - **Master-Replica**: Asynchronous replication for High Availability.
@@ -49,7 +50,7 @@ cargo run --release
 ### 3. Connect via URI
 ToriDB uses a **Unified Connection URI** for configuration. Authentication is **statically required**:
 
-`db://username:password+host:port/dbname`
+`db://username:password+host:port/[dbName]`
 
 > [!IMPORTANT]
 > The `+` symbol is used as a separator between the credentials and the host to avoid ambiguity with the port colon.

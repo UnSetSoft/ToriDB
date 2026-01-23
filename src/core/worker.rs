@@ -1,9 +1,8 @@
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, Mutex};
-use crate::core::memory::DatabaseEngine;
 use crate::core::executor::{execute_command, Session};
 use crate::query::Command;
-use crate::core::persistence::AofLogger;
+use crate::core::registry::DatabaseRegistry;
 
 pub struct CommandRequest {
     pub cmd: Command,
@@ -16,16 +15,16 @@ pub struct CommandRequest {
 #[derive(Clone)]
 pub struct WorkerPool {
     sender: mpsc::Sender<CommandRequest>,
+    pub registry: Arc<DatabaseRegistry>,
 }
 
 impl WorkerPool {
-    pub fn new(size: usize, engine: Arc<DatabaseEngine>, aof: Arc<AofLogger>) -> Self {
+    pub fn new(size: usize, registry: Arc<DatabaseRegistry>) -> Self {
         let (tx, rx) = mpsc::channel::<CommandRequest>(1024);
         let rx = Arc::new(Mutex::new(rx));
 
         for _ in 0..size {
-            let engine = engine.clone();
-            let aof = aof.clone();
+            let registry = registry.clone();
             let rx = rx.clone();
 
             tokio::spawn(async move {
@@ -37,6 +36,15 @@ impl WorkerPool {
 
                     match req_opt {
                         Some(mut req) => {
+                            // Resolve engine and AOF dynamically
+                            let (engine, aof) = match registry.get_or_create(&req.session.current_db) {
+                                Ok(res) => res,
+                                Err(e) => {
+                                    let _ = req.resp_tx.send((req.session, format!("ERROR: Registry Failed: {}", e), None));
+                                    continue;
+                                }
+                            };
+
                             let cmd_for_log = req.cmd.clone();
                             let (res, hash) = execute_command(&engine, req.cmd, &aof, &mut req.session);
                             
@@ -69,7 +77,10 @@ impl WorkerPool {
             });
         }
 
-        Self { sender: tx }
+        Self { 
+            sender: tx,
+            registry,
+        }
     }
 
     pub async fn execute(&self, cmd: Command, raw_cmd: String, session: Session) -> Result<(Session, String, Option<String>), String> {

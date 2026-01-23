@@ -117,6 +117,7 @@ pub enum Command {
     Incr { key: String },
     Decr { key: String },
     RewriteAof,
+    Use { db_name: String },
 }
 
 impl Command {

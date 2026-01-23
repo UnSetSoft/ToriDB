@@ -2,6 +2,15 @@ import net from 'net';
 import { Compiler } from './compiler.js';
 import { RespParser } from './resp.js';
 
+class ToriDBError extends Error {
+    constructor(message, code, originalError = null) {
+        super(message);
+        this.name = "ToriDBError";
+        this.code = code;
+        this.originalError = originalError;
+    }
+}
+
 /**
  * Main client class for interacting with ToriDB.
  * Supports Key-Value, NoSQL structures (List, Set, Hash, JSON), and Relational modeling.
@@ -75,7 +84,9 @@ class ToriDB {
             while ((response = this.parser.parseNext()) !== undefined) {
                 const req = this.pendingRequests.shift();
                 if (req) {
-                    if (response instanceof Error) req.reject(response);
+                    if (response instanceof Error) {
+                        req.reject(new ToriDBError(response.message, "SERVER_ERROR"));
+                    }
                     else req.resolve(response);
                 }
             }
@@ -83,12 +94,18 @@ class ToriDB {
 
         this.socket.on('error', (err) => {
             this.isConnected = false;
-            this.pendingRequests.forEach(req => req.reject(err));
+            const wrapped = new ToriDBError(`Socket Error: ${err.message}`, "SOCKET_ERROR", err);
+            this.pendingRequests.forEach(req => req.reject(wrapped));
             this.pendingRequests = [];
         });
 
         this.socket.on('close', () => {
             this.isConnected = false;
+            if (this.pendingRequests.length > 0) {
+                const err = new ToriDBError("Connection closed unexpectedly", "CONNECTION_CLOSED");
+                this.pendingRequests.forEach(req => req.reject(err));
+                this.pendingRequests = [];
+            }
         });
     }
 
@@ -100,14 +117,20 @@ class ToriDB {
     async connect() {
         if (this.isConnected) return;
         return new Promise((resolve, reject) => {
+            const onError = (err) => {
+                reject(new ToriDBError(`Connection failed: ${err.message}`, "CONNECTION_FAILED", err));
+            };
+            this.socket.once('error', onError);
+
             this.socket.connect(this.port, this.host, async () => {
+                this.socket.removeListener('error', onError);
                 this.isConnected = true;
                 if (this.password) {
                     try {
                         await this.execute("AUTH", this.user, this.password);
                     } catch (e) {
                         this.disconnect();
-                        return reject(new Error(`Authentication failed: ${e.message}`));
+                        return reject(new ToriDBError(`Authentication failed: ${e.message}`, "AUTH_FAILED", e));
                     }
                 }
                 if (this._dbToSelect) {
@@ -120,7 +143,6 @@ class ToriDB {
                 }
                 resolve();
             });
-            this.socket.once('error', reject);
         });
     }
 
@@ -140,11 +162,18 @@ class ToriDB {
      */
     dbName(name) {
         if (this._dbToSelect && this._dbToSelect !== "data") {
-            console.warn("Database already specified in URI. Programmatic selection ignored.");
-            return this;
+            // Warn but facilitate the switch if connected, or update preference
+            // console.warn("Database already specified..."); // Removed strict warning to allow switching
         }
         this.db = name;
         this._dbToSelect = name;
+
+        if (this.isConnected) {
+            // Send USE command immediately to preserve order
+            this.execute("USE", name).catch(e => {
+                console.warn(`Failed to switch to database ${name}: ${e.message}`);
+            });
+        }
         return this;
     }
 
@@ -154,10 +183,21 @@ class ToriDB {
      * @returns {Promise<any>} The server response.
      */
     async execute(...args) {
-        if (!this.isConnected) await this.connect();
+        if (!this.isConnected) {
+            try {
+                await this.connect();
+            } catch (e) {
+                throw e;
+            }
+        }
         return new Promise((resolve, reject) => {
             this.pendingRequests.push({ resolve, reject });
-            this.socket.write(RespParser.encode(args));
+            try {
+                this.socket.write(RespParser.encode(args));
+            } catch (e) {
+                this.pendingRequests.pop();
+                reject(new ToriDBError(`Failed to send command: ${e.message}`, "SEND_ERROR", e));
+            }
         });
     }
 

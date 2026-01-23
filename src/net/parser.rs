@@ -782,8 +782,8 @@ fn parse_rewrite_aof(input: &str) -> IResult<&str, Command> {
 
 fn parse_use(input: &str) -> IResult<&str, Command> {
     map(
-        tuple((tag_no_case("USE"), multispace1, parse_identifier)),
-        |(_, _, db)| Command::Use { db_name: db.to_string() }
+        tuple((tag_no_case("USE"), multispace1, parse_string)),
+        |(_, _, db)| Command::Use { db_name: db }
     )(input)
 }
 

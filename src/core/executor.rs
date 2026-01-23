@@ -151,7 +151,10 @@ pub fn execute_command(engine: &Arc<DatabaseEngine>, cmd: Command, aof: &AofLogg
             ("OK".to_string(), None)
         }
         Command::Use { db_name } => {
-            session.current_db = db_name;
+            if session.current_db != db_name {
+                logger::info(&format!("Client {} switched to database: {}", session._addr, db_name));
+                session.current_db = db_name;
+            }
             ("OK".to_string(), None)
         }
         // ACL Commands

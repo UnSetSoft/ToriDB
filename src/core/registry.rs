@@ -29,6 +29,8 @@ impl DatabaseRegistry {
         let engine = Arc::new(engine_raw);
         let aof = Arc::new(AofLogger::new(db_name)?);
 
+        crate::core::logger::info(&format!("Creating new database: {}", db_name));
+
         self.engines.insert(db_name.to_string(), engine.clone());
         self.aofs.insert(db_name.to_string(), aof.clone());
 

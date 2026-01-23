@@ -62,6 +62,7 @@ impl WorkerPool {
 
                             // Log if it is a write command
                             if cmd_for_log.is_write() {
+                                crate::core::logger::info(&format!("Client {} writing data in {}", req.session._addr, req.session.current_db));
                                 if let Err(e) = aof.log(&log_cmd) {
                                     eprintln!("AOF Error: {}", e);
                                 }

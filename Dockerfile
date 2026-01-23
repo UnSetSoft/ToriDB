@@ -12,7 +12,7 @@ FROM debian:bookworm-slim
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /usr/src/toridb/target/release/db-engine /app/toridb
+COPY --from=builder /usr/src/toridb/target/release/toridb /app/toridb
 
 # Create data directory
 RUN mkdir -p /app/data

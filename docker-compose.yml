@@ -1,5 +1,5 @@
 services:
-  undb:
+  toridb:
     build: .
     image: toridb:latest
     ports:
@@ -10,5 +10,5 @@ services:
       - DB_DATA_DIR=/app/data
       - DB_WORKERS=100
     volumes:
-      - ./undb_data:/app/data
+      - ./data:/app/data
     restart: unless-stopped

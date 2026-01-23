@@ -1,6 +1,6 @@
 {
   "name": "toridb",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ToriDB Client",
   "main": "/dist/toridb.esm.js",
   "scripts": {

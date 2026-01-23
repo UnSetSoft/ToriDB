@@ -118,4 +118,4 @@ class RespParser {
   }
 }
 
-module.exports = { RespParser };
+export { RespParser };

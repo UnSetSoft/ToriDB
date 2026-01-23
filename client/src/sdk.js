@@ -1,6 +1,6 @@
-const net = require('net');
-const { RespParser } = require('./resp');
-const { Compiler } = require('./compiler');
+import net from 'net';
+import { Compiler } from './compiler';
+import { RespParser } from './resp';
 
 /**
  * Main client class for interacting with ToriDB.
@@ -452,4 +452,4 @@ class QueryBuilder {
     }
 }
 
-module.exports = { ToriDB };
+export { ToriDB };

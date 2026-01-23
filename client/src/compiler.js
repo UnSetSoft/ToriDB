@@ -57,6 +57,12 @@ class Compiler {
     return `CREATE TABLE ${name} ${cols.join(" ")}`;
   }
 
+  /**
+   * Maps MongoDB-style operators to ToriDB SQL operators.
+   * @param {string} op - The operator to map (e.g., "$gt").
+   * @returns {string} The corresponding SQL operator or the operator itself if no map exists.
+   * @private
+   */
   static _mapOperator(op) {
     const maps = {
       '$gt': '>', '$gte': '>=', '$lt': '<', '$lte': '<=',
@@ -65,6 +71,13 @@ class Compiler {
     return maps[op] || op;
   }
 
+  /**
+   * Escapes values for safe inclusion in ToriDB queries.
+   * Handles strings, arrays, and objects (JSON).
+   * @param {any} val - The value to escape.
+   * @returns {string} The escaped and formatted value string.
+   * @private
+   */
   static _escape(val) {
     if (typeof val === 'string') {
       // If it's a list for IN operator, don't wrap the whole thing in quotes

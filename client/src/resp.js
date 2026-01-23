@@ -3,14 +3,24 @@
  * Handles Simple Strings, Errors, Integers, Bulk Strings, and Nested Arrays.
  */
 class RespParser {
+  /**
+   * Initializes or resets the parser state.
+   */
   constructor() {
     this.reset();
   }
 
+  /**
+   * Clears the current data buffer.
+   */
   reset() {
     this.buffer = Buffer.alloc(0);
   }
 
+  /**
+   * Feeds raw binary data into the parser's buffer.
+   * @param {Buffer} data - The raw data received from the socket.
+   */
   feed(data) {
     this.buffer = Buffer.concat([this.buffer, data]);
   }
@@ -30,6 +40,13 @@ class RespParser {
     return undefined;
   }
 
+  /**
+   * Decodes a single RESP value from the buffer starting at a given offset.
+   * Internal recursive method for handling nested arrays and bulk strings.
+   * @param {number} offset - The buffer offset to start parsing from.
+   * @returns {Object|null} An object with {value, bytesRead} or null if incomplete.
+   * @private
+   */
   _decode(offset) {
     if (offset >= this.buffer.length) return null;
 

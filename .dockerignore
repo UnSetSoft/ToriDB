@@ -1,0 +1,11 @@
+# Docker ignore
+client/
+doc/
+examples/
+target/
+.git/
+.github/
+README.md
+Dockerfile
+docker-compose.yml
+.gitignore

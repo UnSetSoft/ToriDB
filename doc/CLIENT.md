@@ -14,7 +14,7 @@ Connect using a Unified Connection URI:
 
 ```javascript
 const { ToriDB } = require('toridb');
-const client = new ToriDB("db://admin:secret@localhost:8569");
+const client = new ToriDB("db://admin:secret+localhost:8569");
 
 await client.connect();
 ```

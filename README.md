@@ -47,10 +47,30 @@ cargo run --release
 *The server will start on default port **8569**.*
 
 ### 3. Connect via URI
-ToriDB uses a **Unified Connection URI** for configuration:
+ToriDB uses a **Unified Connection URI** for configuration. Authentication is **statically required**:
+
 `db://username:password+host:port/dbname`
 
-### 4. Use an SDK
+> [!IMPORTANT]
+> The `+` symbol is used as a separator between the credentials and the host to avoid ambiguity with the port colon.
+
+### 4. Configuration (Environment Variables)
+You can configure the server using the following environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DB_PASSWORD` | Password for the `default` user | `secret` |
+| `DB_HOST` | Host address to bind to | `127.0.0.1` |
+| `DB_PORT` | Port to listen on | `8569` |
+| `DB_NAME` | Default database name | `data` |
+| `DB_DATA_DIR` | Directory for persistence | `data` |
+| `DB_WORKERS` | Number of worker threads | `50` |
+| `DB_URI` | Full connection URI (overrides Host/Port/Name) | - |
+
+> [!CAUTION]
+> **Change the default password!** Always set a strong `DB_PASSWORD` before running ToriDB in any environment.
+
+### 5. Use an SDK
 - **[Node.js SDK](./lib/sdk.js)**: `const { DbClient } = require('./lib/sdk')`
 
 ---

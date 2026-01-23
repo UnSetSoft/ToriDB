@@ -1,7 +1,7 @@
 const { ToriDB } = require('../client/sdk');
 
 async function main() {
-  const client = new ToriDB("db://localhost:8569");
+  const client = new ToriDB("db://default:secret+localhost:8569");
 
   try {
     console.log("--- Connecting to ToriDB ---");

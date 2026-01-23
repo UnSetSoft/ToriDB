@@ -16,7 +16,7 @@ Welcome to the **ToriDB** documentation. ToriDB is a high-performance, distribut
 cargo run --release
 ```
 ### 2. Connect with URI
-The primary way to configure and connect is via a **Unified Connection URI**:
+The primary way to configure and connect is via a **Unified Connection URI** (Authentication is required):
 `db://username:password+host:port/dbname`
 
 Default port: **8569**

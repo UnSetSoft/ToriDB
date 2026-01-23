@@ -2,16 +2,21 @@
 
 This document covers user access control and the distributed nature of **ToriDB**.
 
-## 1. Security (ACL & Auth)
-The database implements a Role-Based Access Control (RBAC) system using Access Control Lists (ACLs).
+## 1. RBAC & Authentication
+ToriDB uses a Role-Based Access Control (RBAC) system. By default, it comes with a `default` user that has `+@all` permissions.
 
-### Authentication
+> [!CAUTION]
+> **Initial Configuration**: Before running ToriDB for the first time, you MUST set a secure `DB_PASSWORD` environment variable. This password will be hashed and used for the `default` user.
+> ```bash
+> export DB_PASSWORD="your-strong-password-here"
+> ```
+
+#### ACL Commands
 Connections require authentication via the `AUTH` command. Passwords are hashed using **bcrypt** before storage.
 ```text
 AUTH username password
 ```
 
-### Access Control Lists (ACL)
 Manage users and their permissions dynamically.
 - `ACL SETUSER alice secret "get set *"`: Allow Alice 'get' and 'set' on all keys.
 - `ACL LIST`: View all users.

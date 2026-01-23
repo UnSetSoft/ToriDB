@@ -20,7 +20,8 @@ npm install toridb
 const { ToriDB } = require('toridb');
 
 // Initialize client (use environment variables for sensitive data!)
-const db = new ToriDB(process.env.TORIDB_URI || "db://127.0.0.1:8569");
+// Format: db://user:pass+host:port
+const db = new ToriDB(process.env.TORIDB_URI || "db://default:secret+127.0.0.1:8569");
 
 async function main() {
     await db.connect();

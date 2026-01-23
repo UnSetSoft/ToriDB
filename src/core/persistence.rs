@@ -17,8 +17,16 @@ pub struct AofLogger {
 impl AofLogger {
     pub fn new(db_name: &str) -> io::Result<Self> {
         let dir = std::env::var("DB_DATA_DIR").unwrap_or_else(|_| "data".to_string());
+        // We do strictly create the base dir, but also need to handle subdirectories in db_name
         std::fs::create_dir_all(&dir)?;
+        
         let path = format!("{}/{}.db", dir, db_name);
+        
+        // Ensure parent directory exists (for nested db names like 'test/debug')
+        if let Some(parent) = std::path::Path::new(&path).parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
         let path_owned = path.clone();
         let (tx, mut rx) = mpsc::channel::<AofOp>(10000); // Larger buffer
         let mut file = OpenOptions::new()

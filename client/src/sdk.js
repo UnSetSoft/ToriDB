@@ -116,34 +116,47 @@ class ToriDB {
      */
     async connect() {
         if (this.isConnected) return;
-        return new Promise((resolve, reject) => {
+        if (this._connectPromise) return this._connectPromise;
+
+        this._connectPromise = new Promise((resolve, reject) => {
             const onError = (err) => {
+                this._connectPromise = null;
                 reject(new ToriDBError(`Connection failed: ${err.message}`, "CONNECTION_FAILED", err));
             };
             this.socket.once('error', onError);
 
             this.socket.connect(this.port, this.host, async () => {
                 this.socket.removeListener('error', onError);
-                this.isConnected = true;
-                if (this.password) {
-                    try {
-                        await this.execute("AUTH", this.user, this.password);
-                    } catch (e) {
-                        this.disconnect();
-                        return reject(new ToriDBError(`Authentication failed: ${e.message}`, "AUTH_FAILED", e));
+
+                try {
+                    if (this.password) {
+                        try {
+                            await this.execute("AUTH", this.user, this.password);
+                        } catch (e) {
+                            throw new ToriDBError(`Authentication failed: ${e.message}`, "AUTH_FAILED", e);
+                        }
                     }
-                }
-                if (this._dbToSelect) {
-                    try {
-                        await this.execute("USE", this._dbToSelect);
-                    } catch (e) {
-                        // If it fails, we keep the connection but warn
-                        console.warn(`Failed to select database ${this._dbToSelect}: ${e.message}`);
+                    if (this._dbToSelect) {
+                        // Strict database selection: Fail if the DB cannot be selected.
+                        // This prevents writing to the default 'data' database unintentionally.
+                        try {
+                            await this.execute("USE", this._dbToSelect);
+                        } catch (e) {
+                            throw new ToriDBError(`Failed to select database ${this._dbToSelect}: ${e.message}`, "DB_SELECT_FAILED", e);
+                        }
                     }
+                    this.isConnected = true;
+                    resolve();
+                } catch (e) {
+                    this.disconnect();
+                    reject(e);
+                } finally {
+                    this._connectPromise = null;
                 }
-                resolve();
             });
         });
+
+        return this._connectPromise;
     }
 
     /**

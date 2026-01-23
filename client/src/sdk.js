@@ -128,6 +128,10 @@ class ToriDB {
             this.socket.connect(this.port, this.host, async () => {
                 this.socket.removeListener('error', onError);
 
+                // Set connected immediately so internal execute() calls (like AUTH/USE) can proceed.
+                // If handshake fails, we disconnect() which reverts this to false.
+                this.isConnected = true; 
+
                 try {
                     if (this.password) {
                         try {
@@ -137,15 +141,12 @@ class ToriDB {
                         }
                     }
                     if (this._dbToSelect) {
-                        // Strict database selection: Fail if the DB cannot be selected.
-                        // This prevents writing to the default 'data' database unintentionally.
                         try {
                             await this.execute("USE", this._dbToSelect);
                         } catch (e) {
                             throw new ToriDBError(`Failed to select database ${this._dbToSelect}: ${e.message}`, "DB_SELECT_FAILED", e);
                         }
                     }
-                    this.isConnected = true;
                     resolve();
                 } catch (e) {
                     this.disconnect();

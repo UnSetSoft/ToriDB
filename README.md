@@ -65,7 +65,6 @@ You can configure the server using the following environment variables:
 | `DB_NAME` | Default database name | `data` |
 | `DB_DATA_DIR` | Directory for persistence | `data` |
 | `DB_WORKERS` | Number of worker threads | `50` |
-| `DB_URI` | Full connection URI (overrides Host/Port/Name) | - |
 
 > [!CAUTION]
 > **Change the default password!** Always set a strong `DB_PASSWORD` before running ToriDB in any environment.

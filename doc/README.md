@@ -7,7 +7,8 @@ Welcome to the **ToriDB** documentation. ToriDB is a high-performance, distribut
 2. [SQL Model](./SQL_MODEL.md) - Tables, Indexes, and relational queries.
 3. [NoSQL & JSON](./NOSQL_MODEL.md) - KV, Lists, Sets, ZSets, and JSON paths.
 4. [Security & Clustering](./SECURITY_CLUSTER.md) - RBAC, Replication, and Sharding.
-5. [Competitive Comparison](./COMPARISON.md) - How it stacks up against Redis and SQLite.
+5. [Client SDK](./CLIENT.md) - Official Node.js driver and examples.
+6. [Competitive Comparison](./COMPARISON.md) - How it stacks up against Redis and SQLite.
 
 ## Quick Start
 ### 1. Start the Server
@@ -22,7 +23,7 @@ Default port: **8569**
 
 ### 3. Use an SDK
 We provide native SDKs for the following languages:
-- [Node.js SDK](../lib/sdk.js)
+- [Node.js SDK](../client/src/sdk.js)
 - [Python SDK](../sdk.py)
 
 ---

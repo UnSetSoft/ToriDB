@@ -57,12 +57,9 @@ ToriDB uses a **Unified Connection URI** for configuration:
 
 ## 📚 Documentation
 
-Detailed guides are available in the [**/doc**](./doc/) directory:
-- [Architecture Overview](./doc/ARCHITECTURE.md)
-- [SQL Model Reference](./doc/SQL_MODEL.md)
-- [NoSQL & JSON Guide](./doc/NOSQL_MODEL.md)
-- [Security & Clustering](./doc/SECURITY_CLUSTER.md)
-- [Competitive Comparison](./doc/COMPARISON.md)
+You can read the basic documentation here: [**/doc**](./doc/)
+
+or more detailed here: [**DeepWiki**](https://deepwiki.com/UnSetSoft/ToriDB)
 
 ---
 

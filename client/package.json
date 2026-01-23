@@ -1,0 +1,43 @@
+{
+  "name": "toridb",
+  "version": "1.0.0",
+  "description": "ToriDB Client",
+  "main": "/dist/toridb.esm.js",
+  "scripts": {
+    "build": "rollup -c",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/toridb.esm.js"
+    }
+  },
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/UnSetSoft/ToriDB.git"
+  },
+  "keywords": [
+    "nosql",
+    "sql",
+    "database"
+  ],
+  "author": "UnSetSoft",
+  "license": "UPL-1.0",
+  "bugs": {
+    "url": "https://github.com/UnSetSoft/ToriDB/issues"
+  },
+  "homepage": "https://github.com/UnSetSoft/ToriDB#readme",
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "29.0.0",
+    "@rollup/plugin-node-resolve": "16.0.3",
+    "rollup": "4.56.0",
+    "standard-version": "9.5.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

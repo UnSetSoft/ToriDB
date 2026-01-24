@@ -229,6 +229,12 @@ class ToriDB {
     async commit() { return this.execute("COMMIT"); }
     async rollback() { return this.execute("ROLLBACK"); }
 
+    /**
+     * Sends a PING command to the server.
+     * @returns {Promise<string>} PONG on success.
+     */
+    async ping() { return this.execute("PING"); }
+
     // --- Key-Value & TTL ---
     /**
      * Retrieves the value of a key.
@@ -340,6 +346,12 @@ class ToriDB {
     }
 
     /**
+     * Executes a background AOF rewrite.
+     * @returns {Promise<string>}
+     */
+    async bgRewriteAof() { return this.system.rewriteAof(); }
+
+    /**
      * Accesses JSON operations for a given key.
      * @param {string} key - The JSON key.
      * @returns {Object} An object with JSON operations (get, set).
@@ -379,7 +391,12 @@ class ToriDB {
             createIndex: (idxName, col) => this.execute("CREATE", "INDEX", idxName, "ON", name, `(${col})`),
             addColumn: (col, type) => this.execute("ALTER", "TABLE", name, "ADD", `${col}:${type}`),
             dropColumn: (col) => this.execute("ALTER", "TABLE", name, "DROP", col),
-            search: (col, vec, k) => new QueryBuilder(this, name).search(col, vec, k)
+            search: (col, vec, k) => new QueryBuilder(this, name).search(col, vec, k),
+            count: () => new QueryBuilder(this, name).count(),
+            sum: (col) => new QueryBuilder(this, name).sum(col),
+            avg: (col) => new QueryBuilder(this, name).avg(col),
+            max: (col) => new QueryBuilder(this, name).max(col),
+            min: (col) => new QueryBuilder(this, name).min(col)
         };
     }
 
@@ -401,7 +418,12 @@ class ToriDB {
             },
             delete: (filter) => this.execute("DELETE", "FROM", name, "WHERE", Compiler.compileFilter(filter)),
             select: (cols) => new QueryBuilder(this, name).select(cols),
-            search: (col, vec, k) => new QueryBuilder(this, name).search(col, vec, k)
+            search: (col, vec, k) => new QueryBuilder(this, name).search(col, vec, k),
+            count: () => new QueryBuilder(this, name).count(),
+            sum: (col) => new QueryBuilder(this, name).sum(col),
+            avg: (col) => new QueryBuilder(this, name).avg(col),
+            max: (col) => new QueryBuilder(this, name).max(col),
+            min: (col) => new QueryBuilder(this, name).min(col)
         };
     }
 }
@@ -454,7 +476,8 @@ class SystemManager {
         return {
             meet: (h, p) => this.client.execute("CLUSTER", "MEET", h, String(p)),
             slots: () => this.client.execute("CLUSTER", "SLOTS"),
-            info: () => this.client.execute("CLUSTER", "INFO")
+            info: () => this.client.execute("CLUSTER", "INFO"),
+            addSlots: (...slots) => this.client.execute("CLUSTER", "ADDSLOTS", ...slots.map(String))
         };
     }
 
@@ -500,6 +523,7 @@ class QueryBuilder {
             offset: null,
             orderBy: null,
             groupBy: null,
+            having: null,
             select: "*"
         };
     }
@@ -514,6 +538,15 @@ class QueryBuilder {
         else if (Array.isArray(fields)) this.params.select = fields.join(", ");
         return this;
     }
+
+    /**
+     * Specifies aggregate functions for selection.
+     */
+    count() { this.params.select = "COUNT(*)"; return this; }
+    sum(col) { this.params.select = `SUM(${col})`; return this; }
+    avg(col) { this.params.select = `AVG(${col})`; return this; }
+    max(col) { this.params.select = `MAX(${col})`; return this; }
+    min(col) { this.params.select = `MIN(${col})`; return this; }
 
     /**
      * Adds an INNER JOIN clause.
@@ -557,6 +590,16 @@ class QueryBuilder {
     groupBy(cols) { this.params.groupBy = Array.isArray(cols) ? cols.join(", ") : cols; return this; }
 
     /**
+     * Adds a HAVING clause to the query.
+     * @param {Object|string} filter - Filter object or raw string.
+     * @returns {QueryBuilder} This instance for chaining.
+     */
+    having(filter) {
+        this.params.having = typeof filter === 'string' ? filter : Compiler.compileFilter(filter);
+        return this;
+    }
+
+    /**
      * Compiles and executes the query.
      * @returns {Promise<any[]>} The query results.
      */
@@ -571,6 +614,7 @@ class QueryBuilder {
 
         if (this.params.filter) { args.push("WHERE"); args.push(this.params.filter); }
         if (this.params.groupBy) { args.push("GROUP"); args.push("BY"); args.push(this.params.groupBy); }
+        if (this.params.having) { args.push("HAVING"); args.push(this.params.having); }
         if (this.params.orderBy) { args.push("ORDER"); args.push("BY"); args.push(this.params.orderBy); }
         if (this.params.limit) { args.push("LIMIT"); args.push(String(this.params.limit)); }
         if (this.params.offset) { args.push("OFFSET"); args.push(String(this.params.offset)); }
@@ -587,7 +631,8 @@ class QueryBuilder {
      */
     async search(column, vector, limit = 10) {
         // Syntax: SEARCH table col [v] k
-        const vecStr = JSON.stringify(vector);
+        // We remove spaces to avoid server-side quoting issues in RESP parsing
+        const vecStr = JSON.stringify(vector).replace(/\s+/g, '');
         return this.client.execute("SEARCH", this.target, column, vecStr, String(limit));
     }
 }

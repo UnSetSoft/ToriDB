@@ -27,6 +27,8 @@ await db.connect();
 - `connect()`: Establishes socket connection and performs handshake (AUTH/USE).
 - `disconnect()`: Closes the connection.
 - `dbName(name)`: Programmatically switch database context. Sends `USE <name>` if already connected.
+- `ping()`: Check server health. Returns `PONG`.
+- `bgRewriteAof()`: Triggers background AOF compaction.
 - `execute(...args)`: Send a raw RESP command array to the server.
 - `query(string)`: Parse and send a raw string query.
 
@@ -107,6 +109,7 @@ const User = db.model("users", userBlueprint);
 - `findById(id)`: Fetches a single row.
 - `update(filter, data)`: Update values matching criteria.
 - `delete(filter)`: Remove rows matching criteria.
+- `count()` / `sum(col)` / `avg(col)` / `max(col)` / `min(col)`: Helper methods for aggregate queries.
 - `createIndex(idxName, col)`: Secondary indexing.
 - `addColumn(col, type)` / `dropColumn(col)`: Schema migrations.
 
@@ -127,6 +130,7 @@ const results = await User.find({ age: { $gt: 18 } })
     .orderBy("created_at", "DESC")
     .limit(10)
     .offset(20)
+    .having({ total_spent: { $gt: 100 } }) // Filter after aggregation
     .execute();
 ```
 
@@ -136,6 +140,7 @@ const results = await User.find({ age: { $gt: 18 } })
 ### Vector Search
 Perform high-speed similarity search for embeddings.
 - `.search(column, vector, limit)`
+- `.count()` / `.sum(col)` / `.avg(col)` / `.max(col)` / `.min(col)`
 
 ---
 
@@ -151,6 +156,7 @@ Administrative control over the server.
 
 ### Cluster (`.system.cluster`)
 - `meet(host, port)`: Form cluster partitions.
+- `addSlots(...slots)`: Assign specific hash slots to the current node.
 - `slots()`: View hash-slot assignments.
 - `info()`: Replication state and node health.
 

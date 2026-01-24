@@ -36,6 +36,7 @@ impl User {
             Command::Select { .. } => "select",
             Command::Update { .. } => "update",
             Command::Delete { .. } => "delete",
+            Command::Del { .. } => "delete",
             Command::CreateIndex { .. } => "createindex",
             Command::AclSetUser { .. } => "acl",
             Command::AclList => "acl",
@@ -58,6 +59,10 @@ impl User {
             Command::ZRange { .. } => "zrange",
             Command::ZScore { .. } => "zscore",
             Command::Use { .. } => "use",
+            Command::Begin => "transaction",
+            Command::Commit => "transaction",
+            Command::Rollback => "transaction",
+            Command::VectorSearch { .. } => "select",
         };
 
         // Simplified rule checking

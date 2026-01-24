@@ -4,11 +4,11 @@ use nom::{
     bytes::complete::{tag, tag_no_case, take_while},
     character::complete::{alpha1, char, multispace0, multispace1},
     combinator::{map, opt, recognize},
-    multi::separated_list1,
+    multi::{separated_list1, many0},
     sequence::{delimited, pair, preceded, tuple},
     IResult,
 };
-use crate::query::{Command, Operator, Filter, Selector, AlterOp};
+use crate::query::{Command, Operator, Filter, Selector, AlterOp, JoinType, JoinClause};
 
 fn parse_identifier(input: &str) -> IResult<&str, &str> {
     recognize(pair(
@@ -59,9 +59,45 @@ fn parse_quoted_string(input: &str) -> IResult<&str, String> {
     Ok((&input[end_index..], res))
 }
 
+fn parse_single_quoted_string(input: &str) -> IResult<&str, String> {
+    let (input, _) = char('\'')(input)?;
+    let mut res = String::new();
+    let mut chars = input.char_indices();
+    let mut escaped = false;
+    let mut end_index = 0;
+
+    while let Some((idx, c)) = chars.next() {
+        if escaped {
+            match c {
+                'n' => res.push('\n'),
+                'r' => res.push('\r'),
+                't' => res.push('\t'),
+                '\'' => res.push('\''),
+                '\\' => res.push('\\'),
+                _ => { res.push('\\'); res.push(c); }
+            }
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+        } else if c == '\'' {
+            end_index = idx + 1;
+            break;
+        } else {
+            res.push(c);
+        }
+    }
+    
+    if end_index == 0 {
+        return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Tag)));
+    }
+    
+    Ok((&input[end_index..], res))
+}
+
 fn parse_string(input: &str) -> IResult<&str, String> {
     alt((
         parse_quoted_string,
+        parse_single_quoted_string,
         map(parse_key, |s| s.to_string())
     ))(input)
 }
@@ -88,6 +124,17 @@ fn parse_get(input: &str) -> IResult<&str, Command> {
             parse_key,
         )),
         |(_, _, key)| Command::Get { key: key.to_string() }
+    )(input)
+}
+
+fn parse_del(input: &str) -> IResult<&str, Command> {
+    map(
+        tuple((
+            tag_no_case("DEL"),
+            multispace1,
+            separated_list1(multispace1, parse_key)
+        )),
+        |(_, _, keys)| Command::Del { keys: keys.iter().map(|k| k.to_string()).collect() }
     )(input)
 }
 
@@ -461,11 +508,57 @@ fn parse_value_list(input: &str) -> IResult<&str, String> {
     )(input)
 }
 
-// Atom: col op val
+// Parse column expression: col or table.col or col->path or table.col->path
+fn parse_column_expr(input: &str) -> IResult<&str, String> {
+    let (input, part1) = parse_identifier(input)?;
+    
+    // Check for optional .part2
+    let (input, base) = if let Ok((next, _)) = char::<_, nom::error::Error<&str>>('.')(input) {
+        let (next, part2) = parse_identifier(next)?;
+        (next, format!("{}.{}", part1, part2))
+    } else {
+        (input, part1.to_string())
+    };
+    
+    // Check for arrow expressions
+    let mut result = base;
+    let mut remaining = input;
+    
+    loop {
+        // Try to parse -> or ->>
+        if let Ok((next, _)) = tag::<_, _, nom::error::Error<&str>>("->")(remaining) {
+            // Check for ->> (text extraction)
+            let (next, double) = if let Ok((n2, _)) = char::<_, nom::error::Error<&str>>('>')(next) {
+                (n2, true)
+            } else {
+                (next, false)
+            };
+            
+            // Parse the path key
+            if let Ok((next, key)) = parse_identifier(next) {
+                if double {
+                    result.push_str("->>");
+                } else {
+                    result.push_str("->");
+                }
+                result.push_str(key);
+                remaining = next;
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    
+    Ok((remaining, result))
+}
+
+// Atom: col op val  (col can be column->path)
 fn parse_condition(input: &str) -> IResult<&str, Filter> {
     map(
         tuple((
-            parse_identifier,
+            parse_column_expr,
             multispace1,
             parse_operator,
             multispace1,
@@ -474,7 +567,7 @@ fn parse_condition(input: &str) -> IResult<&str, Filter> {
                 parse_string
             )),
         )),
-        |(col, _, op, _, val)| Filter::Condition(col.to_string(), op, val)
+        |(col, _, op, _, val)| Filter::Condition(col, op, val)
     )(input)
 }
 
@@ -598,7 +691,28 @@ fn parse_delete(input: &str) -> IResult<&str, Command> {
     )(input)
 }
 
-// SELECT [COUNT(*) | *] FROM table [WHERE...] [ORDER BY col [ASC|DESC]] [LIMIT n]
+fn parse_join_clause(input: &str) -> IResult<&str, JoinClause> {
+    let (input, _) = tuple((multispace1, tag_no_case("JOIN"), multispace1))(input)?;
+    let (input, table) = parse_identifier(input)?;
+    let (input, _) = tuple((multispace1, tag_no_case("ON"), multispace1))(input)?;
+    
+    // Parse left operand (e.g. users.id)
+    let (input, left) = parse_column_expr(input)?;
+    
+    let (input, _) = tuple((multispace0, char('='), multispace0))(input)?;
+    
+    // Parse right operand (e.g. orders.user_id)
+    let (input, right) = parse_column_expr(input)?;
+    
+    Ok((input, JoinClause {
+        join_type: JoinType::Inner,
+        table: table.to_string(),
+        on_left: left,
+        on_right: right,
+    }))
+}
+
+// SELECT [COUNT(*) | * | col1, col2] FROM table [JOIN...] [WHERE...] [ORDER BY col [ASC|DESC]] [LIMIT n]
 fn parse_select(input: &str) -> IResult<&str, Command> {
     // Legacy: SELECT table [WHERE...]
     let parse_where_legacy = preceded(
@@ -617,6 +731,7 @@ fn parse_select(input: &str) -> IResult<&str, Command> {
              Command::Select { 
                  table: table.to_string(), 
                  selector: Selector::All, 
+                 join: None,
                  filter, 
                  group_by: None,
                  having: None,
@@ -627,26 +742,33 @@ fn parse_select(input: &str) -> IResult<&str, Command> {
         }
     );
 
-    // Full: SELECT selector FROM table [WHERE...] [ORDER BY...] [LIMIT...]
+    // Full: SELECT selector FROM table [JOIN...] [WHERE...] [ORDER BY...] [LIMIT...]
     let parse_selector = alt((
         map(alt((tag("COUNT(*)"), tag("COUNT"), tag("count(*)"), tag("count"))), |_| Selector::Count),
         map(
-            delimited(tag("SUM("), parse_identifier, char(')')),
-            |col| Selector::Sum(col.to_string())
+            delimited(tag("SUM("), parse_column_expr, char(')')),
+            |col| Selector::Sum(col)
         ),
         map(
-            delimited(tag("AVG("), parse_identifier, char(')')),
-            |col| Selector::Avg(col.to_string())
+            delimited(tag("AVG("), parse_column_expr, char(')')),
+            |col| Selector::Avg(col)
         ),
         map(
-            delimited(tag("MAX("), parse_identifier, char(')')),
-            |col| Selector::Max(col.to_string())
+            delimited(tag("MAX("), parse_column_expr, char(')')),
+            |col| Selector::Max(col)
         ),
         map(
-            delimited(tag("MIN("), parse_identifier, char(')')),
-            |col| Selector::Min(col.to_string())
+            delimited(tag("MIN("), parse_column_expr, char(')')),
+            |col| Selector::Min(col)
         ),
         map(tag("*"), |_| Selector::All),
+        map(
+            separated_list1(
+                tuple((multispace0, char(','), multispace0)), 
+                parse_column_expr
+            ),
+            |cols| Selector::Columns(cols)
+        ),
     ));
 
     let parse_where = preceded(
@@ -658,7 +780,7 @@ fn parse_select(input: &str) -> IResult<&str, Command> {
         tuple((multispace1, tag("GROUP"), multispace1, tag("BY"), multispace1)),
         separated_list1(
             tuple((multispace0, char(','), multispace0)), 
-            parse_identifier
+            parse_column_expr
         )
     );
 
@@ -670,7 +792,7 @@ fn parse_select(input: &str) -> IResult<&str, Command> {
     let parse_order_by = preceded(
         tuple((multispace1, tag("ORDER"), multispace1, tag("BY"), multispace1)),
         pair(
-            parse_identifier,
+            parse_column_expr,
             opt(preceded(multispace1, alt((tag("ASC"), tag("DESC")))))
         )
     );
@@ -694,6 +816,7 @@ fn parse_select(input: &str) -> IResult<&str, Command> {
             tag("FROM"),
             multispace1,
             parse_identifier,
+            many0(parse_join_clause),
             opt(parse_where),
             opt(parse_group_by),
             opt(parse_having),
@@ -701,10 +824,11 @@ fn parse_select(input: &str) -> IResult<&str, Command> {
             opt(parse_limit),
             opt(parse_offset)
         )),
-        |(_, _, selector, _, _, _, table, filter, group_by, having, order, limit_str, offset_str)| {
-            let group_by = group_by.map(|cols: Vec<&str>| cols.iter().map(|s| s.to_string()).collect());
+        |(_, _, selector, _, _, _, table, joins, filter, group_by, having, order, limit_str, offset_str)| {
+            let join = if joins.is_empty() { None } else { Some(joins) };
+            let group_by = group_by.map(|cols: Vec<String>| cols);
             let order_by = order.map(|(col, dir)| {
-                (col.to_string(), dir.unwrap_or("ASC") == "ASC")
+                (col, dir.unwrap_or("ASC") == "ASC")
             });
             let limit = limit_str.and_then(|s| s.parse::<usize>().ok());
             let offset = offset_str.and_then(|s| s.parse::<usize>().ok());
@@ -712,6 +836,7 @@ fn parse_select(input: &str) -> IResult<&str, Command> {
             Command::Select {
                 table: table.to_string(),
                 selector,
+                join,
                 filter,
                 group_by,
                 having,
@@ -725,7 +850,7 @@ fn parse_select(input: &str) -> IResult<&str, Command> {
     alt((parse_full_select, parse_legacy_select))(input)
 }
 
-// CREATE INDEX idx ON table(col)
+// CREATE INDEX idx ON table(col) or CREATE INDEX idx ON table(col->path)
 fn parse_create_index(input: &str) -> IResult<&str, Command> {
     map(
         tuple((
@@ -739,14 +864,14 @@ fn parse_create_index(input: &str) -> IResult<&str, Command> {
             multispace1,
             parse_identifier,
             char('('),
-            parse_identifier,
+            parse_column_expr,  // Accepts both simple column and column->path
             char(')')
         )),
         |(_, _, _, _, idx_name, _, _, _, table, _, col, _)| {
             Command::CreateIndex {
                 index_name: idx_name.to_string(),
                 table: table.to_string(),
-                column: col.to_string(),
+                column: col,
             }
         }
     )(input)
@@ -839,29 +964,90 @@ fn parse_cluster(input: &str) -> IResult<&str, Command> {
     ))(input)
 }
 
+fn parse_begin(input: &str) -> IResult<&str, Command> {
+    map(tag_no_case("BEGIN"), |_| Command::Begin)(input)
+}
+
+fn parse_commit(input: &str) -> IResult<&str, Command> {
+    map(tag_no_case("COMMIT"), |_| Command::Commit)(input)
+}
+
+fn parse_rollback(input: &str) -> IResult<&str, Command> {
+    map(tag_no_case("ROLLBACK"), |_| Command::Rollback)(input)
+}
+
+fn parse_float(input: &str) -> IResult<&str, f64> {
+    let (input, number_str) = recognize(tuple((
+        opt(tag("-")),
+        nom::character::complete::digit1,
+        opt(tuple((char('.'), nom::character::complete::digit1))),
+    )))(input)?;
+    let val = number_str.parse::<f64>().unwrap_or(0.0);
+    Ok((input, val))
+}
+
+fn parse_vector(input: &str) -> IResult<&str, Vec<f64>> {
+    delimited(
+        char('['),
+        separated_list1(
+            tuple((multispace0, char(','), multispace0)),
+            parse_float
+        ),
+        char(']')
+    )(input)
+}
+
+fn parse_search(input: &str) -> IResult<&str, Command> {
+    map(
+        tuple((
+            tag_no_case("SEARCH"),
+            multispace1,
+            parse_identifier, // table
+            multispace1,
+            parse_identifier, // column
+            multispace1,
+            parse_vector, // [1.0, 2.0]
+            multispace1,
+            nom::character::complete::digit1
+        )),
+        |(_, _, table, _, col, _, vec, _, limit_str)| {
+            let limit = limit_str.parse::<usize>().unwrap_or(10);
+            Command::VectorSearch {
+                table: table.to_string(),
+                column: col.to_string(),
+                vector: vec,
+                limit,
+            }
+        }
+    )(input)
+}
+
 pub fn parse_command(input: &str) -> IResult<&str, Command> {
     let (remaining, _) = multispace0(input)?;
     
-    // Try main commands first
-    // Group 1: Core KV & Security
+    // Group 1: General/Admin
     if let Ok(result) = alt((
-        parse_setex,
-        parse_set,
-        parse_get,
-        parse_ttl,
-        parse_auth,
-        parse_acl,
-        parse_incr,
-        parse_decr,
-        parse_use,
-        parse_rewrite_aof,
-        parse_ping,
-        parse_save,
-        parse_client,
-        parse_replicaof,
-        parse_psync,
-        parse_info,
-        parse_cluster,
+        alt((
+            parse_set, parse_get, parse_del, parse_setex, parse_ttl,
+            parse_auth, parse_acl,
+            parse_incr,
+            parse_decr,
+            parse_use,
+            parse_rewrite_aof,
+        )),
+        alt((
+            parse_ping,
+            parse_save,
+            parse_client,
+            parse_replicaof,
+            parse_psync,
+            parse_info,
+            parse_cluster,
+            parse_search,
+            parse_begin,
+            parse_commit,
+            parse_rollback,
+        ))
     ))(remaining) {
         return Ok(result);
     }

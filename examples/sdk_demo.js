@@ -1,4 +1,4 @@
-const { ToriDB } = require('../client/sdk');
+const { ToriDB } = require('../client/src/sdk');
 
 async function main() {
   const client = new ToriDB("db://default:secret+localhost:8569");
@@ -11,7 +11,7 @@ async function main() {
     // 1. KV & TTL Mode
     console.log("--- KV & TTL Mode Demo ---");
     await client.set("server_name", "Tori-Main");
-    await client.setEx("temp_session", { user: "admin" }, 10); // corrected signature: (key, val, ttl)
+    await client.setEx("temp_session", { user: "admin" }, 120); // (key, val, ttl)
 
     console.log("KV Get:", await client.get("server_name"));
     console.log("TTL remains:", await client.ttl("temp_session"));
@@ -37,8 +37,8 @@ async function main() {
     // 3. Native JSON
     console.log("--- Native JSON Demo ---");
     await client.json("config").set("$", { theme: "dark", settings: { notifications: true } });
-    await client.json("config").set("$.settings.notifications", false);
-    console.log("JSON Get partial:", await client.json("config").get("$.settings"), "\n");
+    await client.json("config").set("settings->notifications", false);
+    console.log("JSON Get partial:", await client.json("config").get("settings"), "\n");
 
     // 4. Relational & Models
     console.log("--- Relational & Models Demo ---");

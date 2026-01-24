@@ -37,13 +37,43 @@ impl WorkerPool {
                     match req_opt {
                         Some(mut req) => {
                             // Resolve engine and AOF dynamically
-                            let (engine, aof) = match registry.get_or_create(&req.session.current_db) {
+                            let (engine, aof, is_new) = match registry.get_or_create(&req.session.current_db) {
                                 Ok(res) => res,
                                 Err(e) => {
                                     let _ = req.resp_tx.send((req.session, format!("ERROR: Registry Failed: {}", e), None));
                                     continue;
                                 }
                             };
+
+                            // AOF Replay (Recovery)
+                            if is_new {
+                                if let Ok(cmds) = aof.load() {
+                                    if !cmds.is_empty() {
+                                        crate::core::logger::info(&format!("Replaying {} AOF commands for {}", cmds.len(), req.session.current_db));
+                                        
+                                        // Use a temporary session for replay
+                                        let mut replay_session = Session {
+                                            user: Some(crate::core::security::User {
+                                                username: "system".to_string(),
+                                                password: "".to_string(),
+                                                rules: vec!["+@all".to_string()],
+                                            }),
+                                            _addr: "SYSTEM_RECOVERY".to_string(),
+                                            connected_at: std::time::Instant::now(),
+                                            current_db: req.session.current_db.clone(),
+                                            tx_buffer: None,
+                                        };
+
+                                        for cmd_str in cmds {
+                                             if let Ok((_, cmd)) = crate::net::parser::parse_command(&cmd_str) {
+                                                 // Execute without re-logging
+                                                 execute_command(&engine, cmd, &aof, &mut replay_session);
+                                             }
+                                        }
+                                        crate::core::logger::info("AOF Replay complete.");
+                                    }
+                                }
+                            }
 
                             let cmd_for_log = req.cmd.clone();
                             let (res, hash) = execute_command(&engine, req.cmd, &aof, &mut req.session);
@@ -64,7 +94,7 @@ impl WorkerPool {
                             if cmd_for_log.is_write() {
                                 crate::core::logger::info(&format!("Client {} writing data in {}", req.session._addr, req.session.current_db));
                                 if let Err(e) = aof.log(&log_cmd) {
-                                    eprintln!("AOF Error: {}", e);
+                                    crate::core::logger::error(&format!("AOF Error: {}", e));
                                 }
                                 // Propagate to replicas
                                 engine.replication.propagate(&log_cmd);

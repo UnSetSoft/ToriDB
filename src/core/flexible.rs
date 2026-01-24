@@ -1,3 +1,18 @@
+//! # Flexible Store (NoSQL)
+//! 
+//! This module implements the schema-less, document-oriented storage engine.
+//! It handles raw Key-Value pairs, complex collections (Lists, Sets, Hashes, ZSets),
+//! and native JSON path-based manipulation.
+//! 
+//! ## Concurrency
+//! All data is stored in `DashMap` instances, providing concurrent, lock-free 
+//! reads and fine-grained locking for writes. 
+//! 
+//! ## Eviction
+//! Uses an approximated **LRU (Least Recently Used)** policy. When `max_keys` 
+//! is reached, a random sample of 5 keys is taken, and the oldest based on 
+//! `last_accessed` timestamp is evicted.
+
 use dashmap::DashMap;
 use serde_json::Value;
 use std::sync::Arc;
@@ -10,11 +25,16 @@ struct Entry {
     last_accessed: Instant,
 }
 
+/// The core storage engine for NoSQL data.
 #[derive(Clone)]
 pub struct FlexibleStore {
+    /// Primary data store: key -> {json_value, last_accessed}
     data: Arc<DashMap<String, Entry>>,
+    /// Expiration tracking: key -> expiration_time
     expiry: Arc<DashMap<String, Instant>>,
-    sorted_sets: Arc<DashMap<String, Vec<(f64, String)>>>, // ZSET: key -> [(score, member)]
+    /// Sorted Set storage: key -> [(score, member)]
+    sorted_sets: Arc<DashMap<String, Vec<(f64, String)>>>, 
+    /// Maximum keys before eviction kicks in
     max_keys: usize,
 }
 
@@ -60,6 +80,20 @@ impl FlexibleStore {
                 self.expiry.remove(&key);
             }
         }
+    }
+
+
+
+    pub fn del(&self, keys: &[String]) -> usize {
+        let mut count = 0;
+        for key in keys {
+            if self.data.remove(key).is_some() {
+                self.expiry.remove(key);
+                self.sorted_sets.remove(key);
+                count += 1;
+            }
+        }
+        count
     }
 
     pub fn set(&self, key: String, value: Value) {
@@ -419,9 +453,8 @@ impl FlexibleStore {
             
             let mut current = &entry.value;
             if let Some(p) = path {
-                // Simple path traversal: .key.key or key.key
-                // Supports array index via number? Let's keep it simple: object keys only for now or numeric keys
-                let parts: Vec<&str> = p.split('.').filter(|s| !s.is_empty()).collect();
+                // Simple path traversal: key->key1
+                let parts: Vec<&str> = p.split("->").filter(|s| !s.is_empty()).collect();
                 
                 for part in parts {
                     match current {
@@ -475,7 +508,7 @@ impl FlexibleStore {
         if let Some(mut entry) = self.data.get_mut(key) {
             entry.last_accessed = Instant::now();
             
-            let parts: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
+            let parts: Vec<&str> = path.split("->").filter(|s| !s.is_empty()).collect();
             if parts.is_empty() {
                 // Replace root
                 entry.value = value;
@@ -558,6 +591,20 @@ impl FlexibleStore {
             expiry: Arc::new(DashMap::new()),
             sorted_sets: Arc::new(DashMap::new()),
             max_keys: max,
+        }
+    }
+
+    pub fn restore(&self, data: std::collections::HashMap<String, Value>) {
+        self.data.clear();
+        self.expiry.clear();
+        self.sorted_sets.clear();
+        
+        for (k, v) in data {
+            let entry = Entry {
+                value: v,
+                last_accessed: Instant::now(),
+            };
+            self.data.insert(k, entry);
         }
     }
 }

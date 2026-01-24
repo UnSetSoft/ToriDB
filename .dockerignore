@@ -9,3 +9,5 @@ README.md
 Dockerfile
 docker-compose.yml
 .gitignore
+tests/
+benchmarks/

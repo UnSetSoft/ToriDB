@@ -22,11 +22,27 @@ pub enum Filter {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Selector {
     All,
+    Columns(Vec<String>), // specific columns
     Count,
     Sum(String),  // column name
     Avg(String),
     Max(String),
     Min(String),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum JoinType {
+    Inner,
+    Left,
+    Right,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct JoinClause {
+    pub join_type: JoinType,
+    pub table: String,
+    pub on_left: String,  // table1.col
+    pub on_right: String, // table2.col
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -47,10 +63,10 @@ pub enum Command {
     ClusterSlots,
     ClusterMeet { host: String, port: u16 },
     ClusterAddSlots { slots: Vec<u16> },
-
     // Flexible (KV)
     Set { key: String, value: String }, // Simplification: value is stringified JSON
     Get { key: String },
+    Del { keys: Vec<String> },
     
     // Lists
     LPush { key: String, values: Vec<String> },
@@ -84,6 +100,7 @@ pub enum Command {
     Select { 
         table: String, 
         selector: Selector,
+        join: Option<Vec<JoinClause>>, // Support multiple joins potentially
         filter: Option<Filter>,
         group_by: Option<Vec<String>>,
         having: Option<Filter>,
@@ -91,6 +108,7 @@ pub enum Command {
         limit: Option<usize>,
         offset: Option<usize>,
     },
+    VectorSearch { table: String, column: String, vector: Vec<f64>, limit: usize },
     Update { table: String, filter: Option<Filter>, set: (String, String) },
     Delete { table: String, filter: Option<Filter> },
     
@@ -118,6 +136,12 @@ pub enum Command {
     Decr { key: String },
     RewriteAof,
     Use { db_name: String },
+    
+    // Transactions
+    Begin,
+    Commit,
+    Rollback,
+
 }
 
 impl Command {
@@ -143,7 +167,8 @@ impl Command {
             Command::HSet { .. } | Command::SAdd { .. } | Command::JsonSet { .. } |
             Command::SetEx { .. } | Command::Incr { .. } | Command::Decr { .. } |
             Command::AlterTable { .. } | Command::CreateIndex { .. } | Command::ReplicaOf { .. } | 
-            Command::AclDelUser { .. } | Command::ClientKill { .. } | Command::ZAdd { .. } => true,
+            Command::AclDelUser { .. } | Command::ClientKill { .. } | Command::ZAdd { .. } |
+            Command::Commit => true,
             _ => false,
         }
     }

@@ -57,6 +57,7 @@ class RespParser {
     const content = this.buffer.slice(offset + 1, lineEnd).toString();
     const bytesBeforeData = lineEnd - offset + 2;
 
+    // RESP Protocol Switch - Based on the first byte indicator
     switch (prefix) {
       case 43: // '+' Simple String
         return { value: content, bytesRead: bytesBeforeData };

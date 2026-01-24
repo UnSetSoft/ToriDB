@@ -1,47 +1,75 @@
-# NoSQL & JSON Reference
+# NoSQL & JSON Database Guide (⛩️)
 
-**ToriDB** provides a rich set of NoSQL data structures and native JSON path support, allowing for flexible document storage alongside relational data.
+ToriDB NoSQL mode provides flexible, schema-less storage with high-speed specialized data structures.
 
-## 1. Key-Value & TTL
-### Basic Operations
-- `SET key value`: Store a value.
-- `GET key`: Retrieve a value.
-- `INCR key` / `DECR key`: Atomic increments.
+## 1. Key-Value & Atomicity
 
-### Expiry (TTL)
-- `SETEX key seconds value`: Set a value with a Time-To-Live.
-- `TTL key`: Check remaining life of a key.
+The simplest way to use ToriDB is as a concurrent key-value store.
 
-## 2. Complex Structures
-### Lists
-- `LPUSH tasks "Buy milk"`: Push to head.
-- `LPOP tasks`: Pop from head.
-- `LRange tasks 0 -1`: Get all items.
-
-### Sorted Sets (ZSET)
-Efficient for leaderboards and priority queues.
-- `ZADD rank 100 "user1"`
-- `ZRANGE rank 0 -1`: Get ordered members.
-
-## 3. Native JSON Support
-The engine parses and queries JSON documents natively using **JSON Path** syntax.
-
-### JSON.SET
-Store or update a part of a JSON document.
-```text
-JSON.SET profile $ '{"name": "Alice", "meta": {"role": "admin"}}'
-JSON.SET profile $.meta.role '"superadmin"'
-```
-
-### JSON.GET
-Retrieve specific paths.
-```text
-JSON.GET profile $.meta.role  -> "superadmin"
-```
-
-## 4. Other Structures
-- **Hashes**: `HSET`, `HGET`, `HGETALL`.
-- **Sets**: `SADD`, `SMEMBERS`.
+- **SET/GET**: Basic assignment.
+- **SETEX/TTL**: Automatic expiration.
+- **INCR/DECR**: Atomic 64-bit counters, perfect for unique IDs or rate limiting.
+- **DEL**: Atomic multi-key deletion.
 
 ---
-[Back to Home](./README.md)
+
+## 2. Structured NoSQL (Collections)
+
+ToriDB supports complex structures beyond simple strings.
+
+### 2.1 Lists (Double-Ended Queues)
+Atomic operations at both ends of a list. Use for timelines, task queues, or logging.
+- `LPUSH / RPUSH`: Push elements.
+- `LPOP / RPOP [count]`: Pop one or many elements.
+- `LRANGE <start> <stop>`: Slice the list. support negative indices.
+
+### 2.2 Sets (Unique Collections)
+Unordered collection of unique strings.
+- `SADD`: Add one or more members.
+- `SMEMBERS`: Retrieve all members.
+
+### 2.3 Sorted Sets (ZSET)
+Collections where every member is associated with a **float score**.
+- `ZADD <key> <score> <member>`: Add or update score.
+- `ZRANGE <key> <start> <stop>`: Get items ordered by score.
+- `ZSCORE <key> <member>`: Get current score.
+
+### 2.4 Hashes (Objects/Dictionaries)
+Maps between string fields and string values. efficient for representing objects.
+- `HSET / HGET`: Field-level access.
+- `HGETALL`: Fetch entire object.
+
+---
+
+## 3. Persistent JSON Store
+
+Unlike simple Key-Value pairs, ToriDB understands the structure of JSON documents.
+
+### 3.1 JSON.SET
+**Syntax**: `JSON.SET <key> <path> <value>`
+
+- Use `$` as the root path.
+- Path syntax: `key->nested->field`.
+
+```text
+-- Initialize root
+JSON.SET user:1 $ '{"active": true, "meta": {"login_count": 0}}'
+
+-- Update deep field
+JSON.SET user:1 meta->login_count 1
+```
+
+### 3.2 JSON.GET
+**Syntax**: `JSON.GET <key> [path]`
+
+- If path is omitted, returns the whole document.
+- Returns stringified JSON for sub-elements.
+
+---
+
+## 4. Performance Tips
+1. **Pipelining**: Batch multiple NoSQL commands in a single Transaction (`BEGIN...COMMIT`) to reduce network round-trips.
+2. **Key Namespacing**: Use a colon `:` separator for logical grouping (e.g., `user:1001:profile`).
+
+---
+[Back to Home](../README.md)

@@ -1,4 +1,12 @@
-// Modules are now in lib.rs
+//! # ToriDB Server Entry Point
+//! 
+//! This binary implements the ToriDB server, a hybrid SQL/NoSQL/Vector database.
+//! 
+//! ## Features
+//! - **Environment Config**: Load host, port, and data directory via `DB_*` variables.
+//! - **Async I/O**: High-concurrency networking powered by `Tokio`.
+//! - **Worker Pool**: Parallel query execution with predictable resource usage.
+//! - **Multi-Tenancy**: Dynamic database context switching via `USE` and connection URIs.
 
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -67,6 +75,7 @@ async fn main() -> anyhow::Result<()> {
                 _addr: addr_str.clone(),
                 connected_at: std::time::Instant::now(),
                 current_db,
+                tx_buffer: None,
             };
 
             loop {
@@ -106,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
                     if response == "_PSYNC_OK" {
                         // PSYNC currently needs careful handling with multi-db. 
                         // For now we assume they sync the 'current' DB or the default.
-                        let (engine, _) = worker_pool.registry.get_or_create(&session.current_db).unwrap();
+                        let (engine, _, _) = worker_pool.registry.get_or_create(&session.current_db).unwrap();
 
                         let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(1024);
                         engine.replication.add_replica(addr_str.clone(), tx);

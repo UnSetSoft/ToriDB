@@ -6,89 +6,113 @@
 ![Non-Commercial](https://img.shields.io/badge/Non--Commercial-Only-red?style=for-the-badge)
 ![Commercial Tier](https://img.shields.io/badge/Company%20Tier-$500%2Fmo-orange?style=for-the-badge)
 
-**ToriDB** (inspired by the Japanese *torii* gates, ⛩️) is a high-performance, distributed, and multi-model database engine. Like a *torii* represents a gateway between worlds, ToriDB bridges the gap between **Relational (SQL)** and **Document/Key-Value (NoSQL)** data models.
+**ToriDB** (inspired by the Japanese *torii* gates, ⛩️) is a high-performance, distributed, and multi-model database engine. Like a *torii* represents a gateway between worlds, ToriDB bridges **SQL (Relational)**, **NoSQL (Key-Value/Document)**, and **Vector Storage** models into a single unified platform.
 
 ---
 
 ## ✨ Key Features
 
+### 🧠 Vector Similarity Search
+- **Embeddings Store**: First-class support for `Vector` data types (`Array<f64>`).
+- **Similarity Search**: perform K-Nearest Neighbor searches using Cosine Similarity via the `SEARCH` command.
+- **Hybrid Queries**: Combine SQL filters with semantic vector search (e.g., "Find products similar to this image, where price < 50").
+
 ### 🏛️ Relational SQL Model
-- **Typed Tables**: Define schemas with `int`, `string`, `float`, `bool`, etc.
-- **Advanced Querying**: Aggregates (`COUNT`, `SUM`, `AVG`), `ORDER BY`, `LIMIT`, and complex `WHERE` filters.
-- **Indexing**: High-performance B-Tree and Hash indexes for instant lookups.
+- **Typed Tables**: Define schemas with `int`, `string`, `float`, `bool`, `vector`, etc.
+- **ACID Transactions**: Full `BEGIN`, `COMMIT`, `ROLLBACK` support for atomic multi-statement operations.
+- **Advanced Querying**: Aggregates (`COUNT`, `sum`), `JOIN` support, and complex `WHERE` filters.
+- **Indexing**: High-performance B-Tree and Hash indexes.
 
 ### 📄 Flexible NoSQL & JSON
 - **Modern Data Types**: Native support for Lists, Hashes, Sets, and Sorted Sets (ZSET).
-- **JSON Path Queries**: Query and manipulate JSON documents using path-based syntax (e.g., `$.user.settings`).
+- **JSON Path**: Store and query deep JSON structures (e.g., `user->settings->theme`).
 - **Atomic Ops**: Native `INCR`, `DECR`, and push/pop operations.
 
 ### 🔐 Security & Reliability
 - **RBAC & ACLs**: Granular user permissions and bcrypt-hashed authentication.
-- **Log-Structured Persistence**: Redo Log (`.db`) and Snapshots (`.snap.json`) with CRC32 integrity checks.
-- **Dynamic Multi-Database**: Create and switch databases on-the-fly via URI (`/dbName`) or `USE` command.
-- **Isolated Storage**: Centralized in `/data` and logically segregated per database.
-
-### 🛸 Distributed Architecture
-- **Master-Replica**: Asynchronous replication for High Availability.
-- **Sharding**: Cluster management with 16,384 slots and automatic redirection (`MOVED`).
-- **Worker Pool**: 50-thread concurrency model for predictable latency.
+- **Log-Structured Persistence**: AOF Redo Log + Snapshotting with CRC32 checks.
+- **Replication**: Master-Replica architecture with `PSYNC` for low-latency synchronization.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Requirements
-- Rust (Stable)
-- Node.js (for SDKs)
-
-### 2. Run the Server
+### 1. Run the Server
 ```bash
-cargo run --release
+# Requires Rust
+cargo run --release --bin toridb
 ```
-*The server will start on default port **8569**.*
+*Port 8569*.
 
-### 3. Connect via URI
-ToriDB uses a **Unified Connection URI** for configuration. Authentication is **statically required**:
+### 2. Connect via SDK
+ToriDB uses a **Unified Connection URI**: `db://user:pass+host:port/dbname`.
 
-`db://username:password+host:port/[dbName]`
+```javascript
+/* npm install toridb-client */
+const { ToriDB } = require('../client/src/sdk');
 
-> [!IMPORTANT]
-> The `+` symbol is used as a separator between the credentials and the host to avoid ambiguity with the port colon.
+const db = new ToriDB("db://default:secret+127.0.0.1:8569/data");
+await db.connect();
 
-### 4. Configuration (Environment Variables)
-You can configure the server using the following environment variables:
+// 1. Create Vector-Ready Table
+await db.execute("CREATE", "TABLE", "products", "id:int", "name:string", "embedding:vector");
+
+// 2. Insert Vector Data
+await db.execute("INSERT", "products", "1", "Neural Engine", "[0.8, 0.2, 0.5]");
+
+// 3. Search
+const results = await db.table("products").search("embedding", [0.85, 0.2, 0.5], 5);
+console.log(results);
+```
+
+### 3. Configuration
+Control behavior via Environment Variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DB_PASSWORD` | Password for the `default` user | `secret` |
-| `DB_HOST` | Host address to bind to | `127.0.0.1` |
-| `DB_PORT` | Port to listen on | `8569` |
-| `DB_NAME` | Default database name | `data` |
-| `DB_DATA_DIR` | Directory for persistence | `data` |
-| `DB_WORKERS` | Number of worker threads | `50` |
-
-> [!CAUTION]
-> **Change the default password!** Always set a strong `DB_PASSWORD` before running ToriDB in any environment.
-
-### 5. Use an SDK
-- **[Node.js SDK](./lib/sdk.js)**: `const { DbClient } = require('./lib/sdk')`
+| `DB_PASSWORD` | Admin password | `secret` |
+| `DB_HOST` | Bind address | `127.0.0.1` |
+| `DB_PORT` | Port | `8569` |
+| `DB_DATA_DIR` | Persistence path | `data` |
+| `DB_WORKERS` | Thread pool size | `50` |
 
 ---
 
-## 📚 Documentation
+## ⚡ Performance Benchmark
 
-You can read the basic documentation here: [**/doc**](./doc/)
+Measured on current hardware (5,000 iterations per operation):
 
-or more detailed here: [**DeepWiki**](https://deepwiki.com/UnSetSoft/ToriDB)
+| Operation | Throughput (ops/sec) | Model |
+| :--- | :--- | :--- |
+| **KV SET** | ~3,200 | NoSQL |
+| **KV GET** | ~5,800 | NoSQL |
+| **SQL INSERT** | ~2,200 | Relational |
+| **SQL SELECT (PK)** | ~80 | Relational |
+| **Vector SEARCH** | ~50 | Similarity |
+
+*See [**Performance Deep Dive**](./doc/BENCHMARKS.md) for detailed analysis.*
+
+---
+
+## 📚 Documentation Index
+
+Explore the full capabilities of ToriDB:
+
+- [**🏗️ Architecture & Internals**](./doc/ARCHITECTURE.md): request lifecycle, worker pools, and persistence.
+- [**🏛️ Relational SQL & Vectors**](./doc/SQL_MODEL.md): Schema definition, Joins, and Vector similarity search.
+- [**📄 NoSQL & JSON Guide**](./doc/NOSQL_MODEL.md): Lists, Sets, Hashes, and native JSON pathing.
+- [**🔐 Security & Clustering**](./doc/SECURITY_CLUSTER.md): ACLs, virtual slots, and replication logs.
+- [**🔌 SDK Reference**](./doc/CLIENT.md): Technical guide for the Node.js official client.
+- [**📡 Protocol Specification**](./doc/PROTOCOL.md): Low-level RESP implementation details.
+- [**⚡ Benchmarks**](./doc/BENCHMARKS.md): Performance metrics and analysis.
 
 ---
 
 ## 🛠️ Built With
-- **[Rust](https://www.rust-lang.org/)**: For safety and performance.
-- **[Tokio](https://tokio.rs/)**: For asynchronous networking.
-- **[Nom](https://github.com/rust-bakery/nom)**: For high-speed SQL/Command parsing.
-- **[DashMap](https://github.com/xacrimon/dashmap)**: For concurrent in-memory data structures.
+- **[Rust](https://www.rust-lang.org/)**: Performance & Safety.
+- **[Tokio](https://tokio.rs/)**: Async I/O runtime.
+- **[Nom](https://github.com/rust-bakery/nom)**: Zero-copy command parsing.
+- **[DashMap](https://github.com/xacrimon/dashmap)**: Concurrent in-memory storage.
 
 ---
-
 Notes: developed in collaboration with Gemini 3

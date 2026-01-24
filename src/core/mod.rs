@@ -8,8 +8,10 @@ pub mod executor;
 pub mod worker;
 pub mod replication;
 pub mod cluster;
+
 pub mod logger;
 pub mod registry;
 pub mod uri;
+pub mod types;
 
 

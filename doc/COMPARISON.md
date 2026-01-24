@@ -19,9 +19,18 @@
 
 **Key Advantage**: While SQLite is excelente for local embedding, ToriDB is built for network-distributed environments that require the flexibility of Redis but the structure of a SQL database.
 
-## 3. Why choose ToriDB?
-- **Unified Logic**: One protocol, one connection, two data models.
-- **Developer Productivity**: Use SQL for reports and aggregates, and NoSQL for fast caching and real-time state.
+## 3. ToriDB vs. Vector Databases (Pinecone / Milvus)
+| Feature | Vector Only DBs | ToriDB |
+| :--- | :--- | :--- |
+| **Relational Data** | None / Metadata only | **Full Typed SQL Tables** |
+| **Hybrid Queries** | Limited | **Filter SQL + Search Vector** |
+| **Complexity** | Requires sync from main DB | **Native Single Source of Truth** |
+
+**Key Advantage**: many applications require both relational data (users, logs, prices) and embeddings. ToriDB eliminates the need for expensive syncing between a primary DB and a Vector DB by supporting both in a single, high-performance engine.
+
+## 4. Why choose ToriDB?
+- **Unified Logic**: One protocol, one connection, three data models (SQL, NoSQL, Vector).
+- **Developer Productivity**: Use SQL for reports, NoSQL for fast caching, and Vector Search for similarity retrieval.
 - **Distributed by Default**: Built-in sharding and replication for growing applications.
 
 ---

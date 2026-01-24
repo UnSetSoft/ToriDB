@@ -224,6 +224,11 @@ class ToriDB {
         return this.execute(...s.match(/(?:[^\s"]+|"[^"]*")+/g).map(p => p.replace(/"/g, '')));
     }
 
+    // --- Transactions ---
+    async beginTransaction() { return this.execute("BEGIN"); }
+    async commit() { return this.execute("COMMIT"); }
+    async rollback() { return this.execute("ROLLBACK"); }
+
     // --- Key-Value & TTL ---
     /**
      * Retrieves the value of a key.
@@ -251,7 +256,7 @@ class ToriDB {
      */
     async setEx(key, val, ttl) {
         const s = typeof val === 'object' ? JSON.stringify(val) : String(val);
-        return this.execute("SETEX", key, s, String(ttl));
+        return this.execute("SETEX", key, String(ttl), s);
     }
     /**
      * Gets the remaining time to live of a key.
@@ -259,6 +264,12 @@ class ToriDB {
      * @returns {Promise<number>} TTL in seconds, or -1 if no TTL, or -2 if key doesn't exist.
      */
     async ttl(key) { return this.execute("TTL", key); }
+    /**
+     * Deletes one or more keys.
+     * @param {...string} keys - The keys to delete.
+     * @returns {Promise<number>} The number of keys deleted.
+     */
+    async del(...keys) { return this.execute("DEL", ...keys); }
 
     /**
      * Increments the integer value of a key by one.
@@ -367,7 +378,8 @@ class ToriDB {
             delete: (filter) => this.execute("DELETE", "FROM", name, "WHERE", Compiler.compileFilter(filter)),
             createIndex: (idxName, col) => this.execute("CREATE", "INDEX", idxName, "ON", name, `(${col})`),
             addColumn: (col, type) => this.execute("ALTER", "TABLE", name, "ADD", `${col}:${type}`),
-            dropColumn: (col) => this.execute("ALTER", "TABLE", name, "DROP", col)
+            dropColumn: (col) => this.execute("ALTER", "TABLE", name, "DROP", col),
+            search: (col, vec, k) => new QueryBuilder(this, name).search(col, vec, k)
         };
     }
 
@@ -377,7 +389,20 @@ class ToriDB {
      * @returns {Object} An object with a find method.
      */
     table(name) {
-        return { find: (filter) => new QueryBuilder(this, name, filter) };
+        return {
+            create: (data) => this.execute("INSERT", name, ...Object.values(data).map(v => typeof v === 'object' ? JSON.stringify(v) : String(v))),
+            find: (filter) => new QueryBuilder(this, name, filter),
+            findById: (id) => new QueryBuilder(this, name, { id }).execute().then(r => r[0] || null),
+            update: (filter, data) => {
+                const where = Compiler.compileFilter(filter);
+                const [col, val] = Object.entries(data)[0];
+                const sVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
+                return this.execute("UPDATE", name, "SET", col, "=", sVal, "WHERE", where);
+            },
+            delete: (filter) => this.execute("DELETE", "FROM", name, "WHERE", Compiler.compileFilter(filter)),
+            select: (cols) => new QueryBuilder(this, name).select(cols),
+            search: (col, vec, k) => new QueryBuilder(this, name).search(col, vec, k)
+        };
     }
 }
 
@@ -470,6 +495,7 @@ class QueryBuilder {
         this.target = target;
         this.params = {
             filter: Compiler.compileFilter(filter),
+            joins: [],
             limit: null,
             offset: null,
             orderBy: null,
@@ -480,15 +506,24 @@ class QueryBuilder {
 
     /**
      * Specifies the fields to select.
-     * @param {string|string[]|Object} fields - Fields to select.
+     * @param {string|string[]} fields - Fields to select.
      * @returns {QueryBuilder} This instance for chaining.
      */
     select(fields) {
         if (typeof fields === 'string') this.params.select = fields;
         else if (Array.isArray(fields)) this.params.select = fields.join(", ");
-        else if (typeof fields === 'object') {
-            this.params.select = Object.entries(fields).map(([k, v]) => `${v} AS ${k}`).join(", ");
-        }
+        return this;
+    }
+
+    /**
+     * Adds an INNER JOIN clause.
+     * @param {string} table - The table to join.
+     * @param {string} onLeft - The left column (e.g. "users.id").
+     * @param {string} onRight - The right column (e.g. "orders.user_id").
+     * @returns {QueryBuilder} This instance for chaining.
+     */
+    join(table, onLeft, onRight) {
+        this.params.joins.push({ table, onLeft, onRight });
         return this;
     }
 
@@ -527,6 +562,13 @@ class QueryBuilder {
      */
     async execute() {
         const args = ["SELECT", this.params.select, "FROM", this.target];
+
+        if (this.params.joins.length > 0) {
+            this.params.joins.forEach(j => {
+                args.push("JOIN", j.table, "ON", `${j.onLeft} = ${j.onRight}`);
+            });
+        }
+
         if (this.params.filter) { args.push("WHERE"); args.push(this.params.filter); }
         if (this.params.groupBy) { args.push("GROUP"); args.push("BY"); args.push(this.params.groupBy); }
         if (this.params.orderBy) { args.push("ORDER"); args.push("BY"); args.push(this.params.orderBy); }
@@ -534,6 +576,19 @@ class QueryBuilder {
         if (this.params.offset) { args.push("OFFSET"); args.push(String(this.params.offset)); }
 
         return this.client.execute(...args);
+    }
+
+    /**
+     * Performs a vector similarity search.
+     * @param {string} column - The vector column name.
+     * @param {number[]} vector - The query vector.
+     * @param {number} [limit=10] - Number of nearest neighbors to return.
+     * @returns {Promise<any[]>}
+     */
+    async search(column, vector, limit = 10) {
+        // Syntax: SEARCH table col [v] k
+        const vecStr = JSON.stringify(vector);
+        return this.client.execute("SEARCH", this.target, column, vecStr, String(limit));
     }
 }
 

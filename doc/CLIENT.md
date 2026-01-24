@@ -36,6 +36,7 @@ Basic operations for high-speed cache or status flags.
 | `set(key, val)` | Stores a value (auto-stringifies objects) |
 | `setEx(key, val, ttl)` | Stores a value with expiration (seconds) |
 | `ttl(key)` | Gets remaining time for a key |
+| `del(...keys)` | Deletes one or more keys |
 | `incr(key)` / `decr(key)` | Atomic increment/decrement |
 
 ---
@@ -46,6 +47,7 @@ Basic operations for high-speed cache or status flags.
 ```javascript
 const list = client.list("my_list");
 await list.push("item1"); // Atomic push
+await list.pop(); // Atomic pop
 const items = await list.range(0, -1);
 ```
 
@@ -60,15 +62,51 @@ const members = await set.members();
 ```javascript
 const user = client.hash("user:1001");
 await user.set("name", "Tori");
+await user.get("name");
 await user.all();
 ```
 
+### Sorted Sets
+```javascript
+const rank = client.sortedSet("rank");
+await rank.add(100, "alice");
+const top = await rank.range(0, 10);
+```
+
 ### JSON Documents
-Direct path-based manipulation of JSON strings.
+Direct path-based manipulation of JSON strings using the `->` operator.
 ```javascript
 const doc = client.json("settings");
-await doc.set("$.theme", "dark");
-const theme = await doc.get("$.theme");
+await doc.set("theme", "dark");
+await doc.set("meta->notifications", true);
+const theme = await doc.get("theme");
+```
+
+---
+
+## 2.1 Vector Similarity Search
+ToriDB supports high-performance similarity search for embeddings.
+
+```javascript
+// Search for 5 nearest neighbors based on a vector column
+const results = await client.table("products")
+    .search("embedding_column", [0.1, 0.5, 0.9], 5);
+```
+
+---
+
+## 2.2 Transactions (ACID)
+Group multiple operations into an atomic unit.
+
+```javascript
+await client.beginTransaction();
+try {
+    await client.set("account:A", 100);
+    await client.set("account:B", 200);
+    await client.commit();
+} catch (e) {
+    await client.rollback();
+}
 ```
 
 ---

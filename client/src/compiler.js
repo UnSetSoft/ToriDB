@@ -1,10 +1,18 @@
 /**
- * Command Compiler: Translates JS Objects and Types to ToriDB DSL
+ * Command Compiler: Translates JS Objects and Types to ToriDB DSL (Domain Specific Language).
+ * This class handles the conversion of MongoDB-like filter objects and high-level 
+ * Blueprints into valid server-side SQL/NoSQL commands.
  */
 class Compiler {
   /**
-   * Translates a JS Object to a ToriDB Filter string.
+   * Translates a standard JavaScript Object into a ToriDB Filter string.
+   * Supports nested logic ($or, $and) and comparison operators ($gt, $like, etc.).
+   * 
+   * @example
    * { age: { $gt: 18 }, status: 'active' } -> "age > 18 AND status = 'active'"
+   * 
+   * @param {Object} filter - The filter object to compile.
+   * @returns {string} Compiled SQL WHERE clause part.
    */
   static compileFilter(filter) {
     if (!filter || typeof filter !== 'object') return "";

@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub enum LogLevel {
+    Debug,
     Info,
     Warn,
     Error,
@@ -9,6 +10,7 @@ pub enum LogLevel {
 impl std::fmt::Display for LogLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            LogLevel::Debug => write!(f, "DEBUG"),
             LogLevel::Info => write!(f, "INFO"),
             LogLevel::Warn => write!(f, "WARNING"),
             LogLevel::Error => write!(f, "ERROR"),
@@ -28,10 +30,18 @@ pub fn log(level: LogLevel, message: &str) {
     let minutes = (now / 60) % 60;
     let seconds = now % 60;
 
+    if let LogLevel::Debug = level {
+        if !cfg!(debug_assertions) { return; }
+    }
+
     println!(
         "[{:02}:{:02}:{:02}] [{}] {}",
         hours, minutes, seconds, level, message
     );
+}
+
+pub fn debug(message: &str) {
+    log(LogLevel::Debug, message);
 }
 
 pub fn info(message: &str) {

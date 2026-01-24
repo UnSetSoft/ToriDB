@@ -1,169 +1,198 @@
-# ToriDB Node.js SDK (⛩️)
+# ToriDB Node.js SDK Reference (⛩️)
 
-The ToriDB Node.js SDK is the official client for interacting with ToriDB. It provides a highly intuitive, fluent interface for both NoSQL and Relational workloads.
+The official Node.js client for **ToriDB**. Highly intuitive, multi-model, and optimized for low-latency workloads.
 
-## Installation
+## 📦 Installation
 
 ```bash
 npm install toridb
 ```
 
-## Connection
+---
 
-Connect using a Unified Connection URI:
+## 🔌 Connection & URI
+
+ToriDB uses a **Unified Connection URI** to configure the client.
 
 ```javascript
 const { ToriDB } = require('toridb');
 
-// Option A: Specify DB in URI (Recommended)
-const client = new ToriDB("db://admin:secret+localhost:8569/production");
+// Format: db://[user]:[password][@|+][host]:[port][/[database]][?options]
+const db = new ToriDB("db://admin:secret+127.0.0.1:8569/production?workers=20");
 
-// Option B: Programmatic selection (Only if not in URI)
-const client2 = new ToriDB("db://admin:secret+localhost:8569");
-client2.dbName("staging"); 
-
-await client.connect();
+await db.connect();
 ```
+
+### Methods
+- `connect()`: Establishes socket connection and performs handshake (AUTH/USE).
+- `disconnect()`: Closes the connection.
+- `dbName(name)`: Programmatically switch database context. Sends `USE <name>` if already connected.
+- `execute(...args)`: Send a raw RESP command array to the server.
+- `query(string)`: Parse and send a raw string query.
 
 ---
 
-## 1. Key-Value & Atomic Counters
-Basic operations for high-speed cache or status flags.
+## 🗝️ Key-Value & Atomicity
+
+High-speed caching and counters.
 
 | Method | Description |
-|--------|-------------|
-| `get(key)` | Retrieves a value |
-| `set(key, val)` | Stores a value (auto-stringifies objects) |
-| `setEx(key, val, ttl)` | Stores a value with expiration (seconds) |
-| `ttl(key)` | Gets remaining time for a key |
-| `del(...keys)` | Deletes one or more keys |
-| `incr(key)` / `decr(key)` | Atomic increment/decrement |
+| :--- | :--- |
+| `set(key, val)` | Stores a value. Objects are auto-stringified. |
+| `get(key)` | Retrieves a value. |
+| `setEx(key, val, ttl)` | Stores a value with Expiration (seconds). |
+| `ttl(key)` | Returns seconds remaining or error codes (-1, -2). |
+| `del(...keys)` | Deletes one or more keys. Returns count. |
+| `incr(key)` | Atomic increment. |
+| `decr(key)` | Atomic decrement. |
 
 ---
 
-## 2. NoSQL Data Structures
+## 📚 NoSQL Data Structures
 
-### Lists (LPUSH/RPUSH)
-```javascript
-const list = client.list("my_list");
-await list.push("item1"); // Atomic push
-await list.pop(); // Atomic pop
-const items = await list.range(0, -1);
-```
+Access specialized collections via sub-managers.
 
-### Sets
-```javascript
-const set = client.setOf("my_set");
-await set.add("a", "b", "c");
-const members = await set.members();
-```
+### Lists (`.list(key)`)
+Use as queues, stacks, or timelines.
+- `push(...vals)`: LPUSH (Head).
+- `rpush(...vals)`: RPUSH (Tail).
+- `pop([count])`: LPOP.
+- `rpop([count])`: RPOP.
+- `range(start, stop)`: Slice the list. Supports negative indices (0 -1 for all).
 
-### Hashes (Objects)
-```javascript
-const user = client.hash("user:1001");
-await user.set("name", "Tori");
-await user.get("name");
-await user.all();
-```
+### Sets (`.setOf(key)`)
+Unordered collections of unique strings.
+- `add(...members)`: SADD.
+- `members()`: SMEMBERS.
 
-### Sorted Sets
-```javascript
-const rank = client.sortedSet("rank");
-await rank.add(100, "alice");
-const top = await rank.range(0, 10);
-```
+### Hashes (`.hash(key)`)
+Optimized storage for objects/dictionaries.
+- `set(field, val)`: HSET.
+- `get(field)`: HGET.
+- `all()`: HGETALL (returns object).
 
-### JSON Documents
-Direct path-based manipulation of JSON strings using the `->` operator.
-```javascript
-const doc = client.json("settings");
-await doc.set("theme", "dark");
-await doc.set("meta->notifications", true);
-const theme = await doc.get("theme");
-```
+### Sorted Sets (`.sortedSet(key)`)
+Priority queues and leaderboards.
+- `add(score, member)`: ZADD.
+- `range(start, stop)`: ZRANGE.
+- `score(member)`: ZSCORE.
+
+### JSON (`.json(key)`)
+Deep document manipulation using the `->` operator.
+- `set(path, val)`: JSON.SET. Use `$` for root.
+- `get([path])`: JSON.GET. Defaults to root.
 
 ---
 
-## 2.1 Vector Similarity Search
-ToriDB supports high-performance similarity search for embeddings.
+## 🏛️ Relational Modeling
+
+ToriDB provides a powerful SQL layer with a MongoDB-like fluent interface.
+
+### Blueprints & Models
+Define a schema to get a typed model.
 
 ```javascript
-// Search for 5 nearest neighbors based on a vector column
-const results = await client.table("products")
-    .search("embedding_column", [0.1, 0.5, 0.9], 5);
+const userBlueprint = new ToriDB.Blueprint({
+    id: { type: 'INT', primary: true },
+    email: { type: 'String', unique: true },
+    profile: 'Object' // Maps to JSON
+});
+
+const User = db.model("users", userBlueprint);
 ```
+
+**Model Methods:**
+- `create(data)`: Validated insert.
+- `find(filter)`: Starts a `QueryBuilder`.
+- `findById(id)`: Fetches a single row.
+- `update(filter, data)`: Update values matching criteria.
+- `delete(filter)`: Remove rows matching criteria.
+- `createIndex(idxName, col)`: Secondary indexing.
+- `addColumn(col, type)` / `dropColumn(col)`: Schema migrations.
+
+### Table API (`.table(name)`)
+Access existing tables without defining a full Blueprint.
+- Methods: `create`, `find`, `findById`, `update`, `delete`, `select`, `search`.
 
 ---
 
-## 2.2 Transactions (ACID)
-Group multiple operations into an atomic unit.
+## 🔍 Query Builder
+
+Chain methods to build complex SQL queries. Returned by `find()`, `select()`, or `search()`.
 
 ```javascript
-await client.beginTransaction();
+const results = await User.find({ age: { $gt: 18 } })
+    .select(["id", "email"])
+    .join("profiles", "users.id", "profiles.user_id")
+    .orderBy("created_at", "DESC")
+    .limit(10)
+    .offset(20)
+    .execute();
+```
+
+### Supported Operators
+`$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$eq`, `$like`, `$in`, `$and`, `$or`.
+
+### Vector Search
+Perform high-speed similarity search for embeddings.
+- `.search(column, vector, limit)`
+
+---
+
+## 🛠️ System Manager (`.system`)
+
+Administrative control over the server.
+
+### ACL (`.system.acl`)
+- `createUser(user, pass, rules)`: Rules format `["+get", "-delete"]`.
+- `getUser(user)`
+- `listUsers()`
+- `deleteUser(user)`
+
+### Cluster (`.system.cluster`)
+- `meet(host, port)`: Form cluster partitions.
+- `slots()`: View hash-slot assignments.
+- `info()`: Replication state and node health.
+
+### Persistence (`.system`)
+- `save()`: Foreground snapshot.
+- `rewriteAof()`: Background log optimization.
+
+### Clients (`.system.clients`)
+- `list()`: Connected clients.
+- `kill(addr)`: Terminate specific connection.
+
+---
+
+## 🔄 Transactions (ACID)
+
+Atomic multi-operation blocks.
+
+```javascript
+await db.beginTransaction();
 try {
-    await client.set("account:A", 100);
-    await client.set("account:B", 200);
-    await client.commit();
+    await db.set("acc:1", 100);
+    await db.set("acc:2", 200);
+    await db.commit();
 } catch (e) {
-    await client.rollback();
+    await db.rollback();
 }
 ```
 
 ---
 
-## 3. Relational Model (SQL Builder)
+## ⚠️ Error Handling
 
-ToriDB allows you to treat data as tables with formal schemas while maintaining NoSQL speed.
+The client throws `ToriDBError` with useful metadata.
 
-### Define a Blueprint
 ```javascript
-const products = client.model("products", new ToriDB.Blueprint({
-    sku: "text primary key",
-    price: "decimal",
-    tags: "json"
-}));
-```
-
-### Fluent Query Builder
-```javascript
-const items = await products.find({ price: { "<": 100 } })
-    .select(["sku", "price"])
-    .orderBy("price", "asc")
-    .limit(5)
-    .execute();
+try {
+    // ... code
+} catch (err) {
+    console.log(err.code); // e.g., "SERVER_ERROR", "AUTH_FAILED"
+    console.log(err.originalError); // Low-level socket/parser error
+}
 ```
 
 ---
-
-## 4. System & Administration
-
-The SDK includes a `system` manager for administrative tasks.
-
-### Access Control (ACL)
-```javascript
-await client.system.acl.createUser("dev_user", "password123", ["+get", "+hset"]);
-```
-
-### Cluster & Replication
-```javascript
-await client.system.cluster.info();
-await client.system.replication.slaveOf("master-host", 8569);
-```
-
-### Persistence
-```javascript
-await client.system.save(); // Force snapshots for current DB
-await client.system.rewriteAof(); // Optimize AOF file
-await client.execute("USE", "archive"); // Switch to another DB dynamically
-```
-
----
-
-## 5. Security Best Practices
-- **Environment Variables**: Always use `process.env` for connection URIs.
-- **RBAC**: create specific users for your applications instead of using the `default` administrative account.
-- **Validation**: ToriDB validates types in the Relational model; use it for data that requires high integrity.
-
----
-## License
-UPL-1.0
+[Back to Document Index](../README.md)

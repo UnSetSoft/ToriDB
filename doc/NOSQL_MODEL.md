@@ -4,72 +4,61 @@ ToriDB NoSQL mode provides flexible, schema-less storage with high-speed special
 
 ## 1. Key-Value & Atomicity
 
-The simplest way to use ToriDB is as a concurrent key-value store.
+The fastest way to store data, utilizing lock-free concurrent hash maps.
 
-- **SET/GET**: Basic assignment.
-- **SETEX/TTL**: Automatic expiration.
-- **INCR/DECR**: Atomic 64-bit counters, perfect for unique IDs or rate limiting.
-- **DEL**: Atomic multi-key deletion.
+- **SET / GET**: Primary operations. Value can be any string or JSON.
+- **SETEX / TTL**: Automatic expiration with sub-millisecond precision.
+- **DEL**: supports multiple keys in a single atomic operation.
+- **INCR / DECR**: Atomic 64-bit integer counters. Handles overflow/underflow safely.
 
 ---
 
-## 2. Structured NoSQL (Collections)
+## 2. Advanced Data Structures
 
-ToriDB supports complex structures beyond simple strings.
+Access collections directly by key.
 
-### 2.1 Lists (Double-Ended Queues)
-Atomic operations at both ends of a list. Use for timelines, task queues, or logging.
-- `LPUSH / RPUSH`: Push elements.
-- `LPOP / RPOP [count]`: Pop one or many elements.
-- `LRANGE <start> <stop>`: Slice the list. support negative indices.
+### 2.1 Lists (Deque)
+Double-ended queues optimized for fast push/pop at both ends.
+- `LPUSH / RPUSH`: Add elements.
+- `LPOP / RPOP [count]`: remove elements.
+- `LRANGE <start> <stop>`: Get a slice (e.g., `LRANGE mylist 0 -1` for all).
 
-### 2.2 Sets (Unique Collections)
-Unordered collection of unique strings.
-- `SADD`: Add one or more members.
-- `SMEMBERS`: Retrieve all members.
+### 2.2 Sets
+Unordered collection of unique strings. O(1) membership checks.
+- `SADD`: Add members.
+- `SMEMBERS`: Get all members.
 
 ### 2.3 Sorted Sets (ZSET)
-Collections where every member is associated with a **float score**.
-- `ZADD <key> <score> <member>`: Add or update score.
-- `ZRANGE <key> <start> <stop>`: Get items ordered by score.
-- `ZSCORE <key> <member>`: Get current score.
+Priority-ordered collections using **float scores**.
+- `ZADD <key> <score> <member>`: Add or update a member's priority.
+- `ZRANGE <key> <start> <stop>`: Get members ordered by score (ascending).
+- `ZSCORE <key> <member>`: Check current rank.
 
-### 2.4 Hashes (Objects/Dictionaries)
-Maps between string fields and string values. efficient for representing objects.
-- `HSET / HGET`: Field-level access.
-- `HGETALL`: Fetch entire object.
+### 2.4 Hashes
+key-Field mapping, perfect for storing complex objects without stringifying the entire thing.
+- `HSET / HGET`: Field-level operations.
+- `HGETALL`: Returns the entire hash as an object/map.
 
 ---
 
-## 3. Persistent JSON Store
+## 3. Native JSON Documents
 
-Unlike simple Key-Value pairs, ToriDB understands the structure of JSON documents.
+ToriDB understands JSON. You can modify parts of a document without re-writing the whole string.
 
 ### 3.1 JSON.SET
 **Syntax**: `JSON.SET <key> <path> <value>`
-
-- Use `$` as the root path.
-- Path syntax: `key->nested->field`.
-
-```text
--- Initialize root
-JSON.SET user:1 $ '{"active": true, "meta": {"login_count": 0}}'
-
--- Update deep field
-JSON.SET user:1 meta->login_count 1
-```
+- **Root**: Use `$` to set the entire object.
+- **Paths**: Use `->` to traverse (e.g., `user:101 config->theme`).
 
 ### 3.2 JSON.GET
 **Syntax**: `JSON.GET <key> [path]`
-
-- If path is omitted, returns the whole document.
-- Returns stringified JSON for sub-elements.
+- returns stringified JSON segments based on the path provided.
 
 ---
 
-## 4. Performance Tips
-1. **Pipelining**: Batch multiple NoSQL commands in a single Transaction (`BEGIN...COMMIT`) to reduce network round-trips.
-2. **Key Namespacing**: Use a colon `:` separator for logical grouping (e.g., `user:1001:profile`).
+## 4. Performance Guidelines
+1. **Concurrency**: ToriDB uses `DashMap`, meaning multiple threads can read/write different keys without competition.
+2. **Persistence**: NoSQL operations are logged to the AOF. Large JSON documents will increase AOF growth; consider periodic `REWRITEAOF`.
 
 ---
-[Back to Home](../README.md)
+[Back to Document Index](../README.md)

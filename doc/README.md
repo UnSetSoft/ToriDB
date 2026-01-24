@@ -8,7 +8,9 @@ Welcome to the **ToriDB** documentation. ToriDB is a high-performance, distribut
 3. [NoSQL & JSON](./NOSQL_MODEL.md) - KV, Lists, Sets, ZSets, and JSON paths.
 4. [Security & Clustering](./SECURITY_CLUSTER.md) - RBAC, Replication, and Sharding.
 5. [Client SDK](./CLIENT.md) - Official Node.js driver and examples.
-6. [Competitive Comparison](./COMPARISON.md) - How it stacks up against Redis and SQLite.
+6. [Low-level Protocol](./PROTOCOL.md) - RESP implementation and wire format.
+7. [Benchmarks](./BENCHMARKS.md) - Real-world performance results.
+8. [Competitive Comparison](./COMPARISON.md) - How it stacks up against Redis and SQLite.
 
 ## Quick Start
 ### 1. Start the Server

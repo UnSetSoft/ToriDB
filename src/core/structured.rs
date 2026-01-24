@@ -1117,8 +1117,8 @@ impl StructuredStore {
         selector: Selector,
         joins: &Vec<JoinClause>,
         filter: Option<Filter>,
-        _group_by: Option<Vec<String>>,
-        _having: Option<Filter>,
+        group_by: Option<Vec<String>>,
+        having: Option<Filter>,
         _order_by: Option<(String, bool)>, 
         limit: Option<usize>,
         offset: Option<usize>
@@ -1148,6 +1148,49 @@ impl StructuredStore {
             rows.retain(|row| self.evaluate_filter_map(&f, row));
         }
         
+        let is_aggregate_selector = !matches!(selector, Selector::All | Selector::Columns(_));
+
+        // GROUP BY Logic for JOINs
+        if let Some(group_cols) = group_by {
+            let mut buckets: HashMap<Vec<UnifiedValue>, Vec<HashMap<String, UnifiedValue>>> = HashMap::new();
+            for row in rows {
+                let key: Vec<UnifiedValue> = group_cols.iter()
+                    .map(|c| self.resolve_val_map(&row, c))
+                    .collect();
+                buckets.entry(key).or_insert_with(Vec::new).push(row);
+            }
+
+            let mut agg_results = Vec::new();
+            for (key, bucket_rows) in buckets {
+                // Compute aggregate using map values
+                let agg_val = self.compute_aggregate_map(&selector, &bucket_rows)?;
+                
+                // Check HAVING
+                let mut matches_having = true;
+                if let Some(ref h_filter) = having {
+                    match h_filter {
+                        Filter::Condition(_, op, val_str) => {
+                             // Simplification: HAVING on aggregate value (last column)
+                             matches_having = self.evaluate_condition(&agg_val, val_str, &DataType::Float, op);
+                        },
+                        _ => {}
+                    }
+                }
+
+                if matches_having {
+                    let mut res_row: Vec<String> = key.iter().map(|v| v.to_string()).collect();
+                    res_row.push(agg_val.to_string());
+                    agg_results.push(res_row);
+                }
+            }
+            return Ok(self.apply_limit_offset(agg_results, limit, offset));
+
+        } else if is_aggregate_selector {
+            // Global aggregation over joined rows
+            let agg_val = self.compute_aggregate_map(&selector, &rows)?;
+            return Ok(vec![vec![agg_val.to_string()]]);
+        }
+
         let mut results = Vec::new();
         for row in rows {
             match &selector {
@@ -1159,30 +1202,59 @@ impl StructuredStore {
                     results.push(proj);
                 },
                 Selector::All => {
+                    // Collect values from map, prefer qualified names? 
+                    // To keep it simple and stable, let's just return values.
                     results.push(row.values().map(|v| v.to_string()).collect());
                 },
-                Selector::Count => {},
-                _ => return Err(anyhow!("Aggregates not supported in JOIN yet"))
+                _ => unreachable!() 
             }
         }
-
-        if matches!(selector, Selector::Count) {
-             return Ok(vec![vec![format!("{}", results.len())]]);
-        }
         
+        Ok(self.apply_limit_offset(results, limit, offset))
+    }
+
+    fn compute_aggregate_map(&self, selector: &Selector, rows: &Vec<HashMap<String, UnifiedValue>>) -> Result<UnifiedValue> {
+        match selector {
+            Selector::Count => Ok(UnifiedValue::Integer(rows.len() as i64)),
+            Selector::Sum(col) | Selector::Avg(col) | Selector::Max(col) | Selector::Min(col) => {
+                 let mut nums: Vec<f64> = Vec::new();
+                 for r in rows {
+                     let val = self.resolve_val_map(r, col);
+                     match val {
+                         UnifiedValue::Integer(i) => nums.push(i as f64),
+                         UnifiedValue::Float(f) => nums.push(f),
+                         _ => {}
+                     }
+                 }
+                 
+                 match selector {
+                     Selector::Sum(_) => Ok(UnifiedValue::Float(nums.iter().sum())),
+                     Selector::Avg(_) => {
+                         let count = nums.len() as f64;
+                         if count == 0.0 { Ok(UnifiedValue::Float(0.0)) } else { Ok(UnifiedValue::Float(nums.iter().sum::<f64>() / count)) }
+                     },
+                     Selector::Max(_) => Ok(UnifiedValue::Float(nums.iter().cloned().fold(f64::NEG_INFINITY, f64::max))),
+                     Selector::Min(_) => Ok(UnifiedValue::Float(nums.iter().cloned().fold(f64::INFINITY, f64::min))),
+                     _ => unreachable!()
+                 }
+            },
+            _ => Err(anyhow!("Invalid aggregate selector"))
+        }
+    }
+
+    fn apply_limit_offset(&self, rows: Vec<Vec<String>>, limit: Option<usize>, offset: Option<usize>) -> Vec<Vec<String>> {
         let start = offset.unwrap_or(0);
+        if start >= rows.len() { return Vec::new(); }
+        
         let end = if let Some(l) = limit {
-            (start + l).min(results.len())
+            (start + l).min(rows.len())
         } else {
-            results.len()
+            rows.len()
         };
         
-        if start >= results.len() {
-            return Ok(Vec::new());
-        }
-
-        Ok(results[start..end].to_vec())
+        rows[start..end].to_vec()
     }
+
 
     fn scan_table_map(&self, table_name: &str) -> Result<Vec<HashMap<String, UnifiedValue>>> {
         if let Some(lock) = self.tables.get(table_name) {

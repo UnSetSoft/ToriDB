@@ -1,0 +1,45 @@
+    Checking toridb v0.1.3 (E:\proyects\undb)
+error[E0277]: the trait bound `UnifiedValue: From<f64>` is not satisfied
+    --> src\core\structured.rs:1237:100
+     |
+1237 |                      Selector::Max(_) => Ok(nums.iter().cloned().fold(f64::NEG_INFINITY, f64::max).into()),
+     |                                                                                                    ^^^^ the trait `From<f64>` is not implemented for `UnifiedValue`
+     |
+     = help: the trait `From<f64>` is not implemented for `UnifiedValue`
+             but trait `From<Value>` is implemented for it
+     = help: for that trait implementation, expected `Value`, found `f64`
+     = note: required for `f64` to implement `std::convert::Into<UnifiedValue>`
+
+error[E0277]: the trait bound `UnifiedValue: From<f64>` is not satisfied
+    --> src\core\structured.rs:1238:96
+     |
+1238 |                      Selector::Min(_) => Ok(nums.iter().cloned().fold(f64::INFINITY, f64::min).into()),
+     |                                                                                                ^^^^ the trait `From<f64>` is not implemented for `UnifiedValue`
+     |
+     = help: the trait `From<f64>` is not implemented for `UnifiedValue`
+             but trait `From<Value>` is implemented for it
+     = help: for that trait implementation, expected `Value`, found `f64`
+     = note: required for `f64` to implement `std::convert::Into<UnifiedValue>`
+
+warning: value assigned to `rows` is never read
+    --> src\core\structured.rs:1186:13
+     |
+1186 |             rows = Vec::new(); // placeholder, we'll use agg_results
+     |             ^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` on by default
+
+warning: variable does not need to be mutable
+    --> src\core\structured.rs:1246:34
+     |
+1246 |     fn apply_limit_offset(&self, mut rows: Vec<Vec<String>>, limit: Option<usize>, offset: Option<usize>) -> Vec<Vec<String>> {
+     |                                  ----^^^^
+     |                                  |
+     |                                  help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` on by default
+
+For more information about this error, try `rustc --explain E0277`.
+warning: `toridb` (lib) generated 2 warnings
+error: could not compile `toridb` (lib) due to 2 previous errors; 2 warnings emitted
